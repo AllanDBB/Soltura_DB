@@ -1,7 +1,7 @@
 USE soltura;
 GO
 
--- Limpieza previa de tablas en orden para preservar integridad referencial
+-- Limpieza de las tablas en orden para evitar conflictos
 DELETE FROM solturadb.soltura_redemptions;
 DELETE FROM solturadb.soltura_planperson_users;
 DELETE FROM solturadb.soltura_benefits;
@@ -19,7 +19,7 @@ DELETE FROM solturadb.soltura_subscriptions;
 DELETE FROM dbo.soltura_benefitSubTypes;
 DELETE FROM dbo.soltura_benefitTypes;
 
--- Resetear los contadores autoincrement
+-- Resetear los contadores autoincrementables
 DBCC CHECKIDENT ('solturadb.soltura_redemptions', RESEED, 0);
 DBCC CHECKIDENT ('solturadb.soltura_benefits', RESEED, 0);
 DBCC CHECKIDENT ('solturadb.soltura_planperson', RESEED, 0);
@@ -34,7 +34,7 @@ DBCC CHECKIDENT ('solturadb.soltura_redemptionMethods', RESEED, 0);
 DBCC CHECKIDENT ('solturadb.soltura_companyinfotypes', RESEED, 0);
 DBCC CHECKIDENT ('solturadb.soltura_subscriptions', RESEED, 0);
 
--- 1. Creación de monedas (si no existen)
+-- 1. Creación de monedas
 IF NOT EXISTS(SELECT 1 FROM solturadb.soltura_currency WHERE name = 'United States Dollar')
 BEGIN
     INSERT INTO solturadb.soltura_currency (name, acronym, symbol)
@@ -77,7 +77,8 @@ INSERT INTO solturadb.soltura_categorybenefits (name, enabled) VALUES
     ('Hospedaje', 0x01),
     ('Coworking', 0x01);
 
--- 4. Creación de empresas proveedoras de servicios (7 empresas)
+-- 4. Creación de empresas proveedoras de servicios 
+-- Inserción de direcciones
 INSERT INTO solturadb.soltura_addresses (line1, line2, zipcode, cityid, geoposition)
 VALUES 
     ('Avenida Central', 'Edificio Torre A', '10101', 1, geometry::STGeomFromText('POINT(-84.08 9.93)', 4326)),
@@ -90,13 +91,13 @@ VALUES
 
 -- Inserción de empresas asociadas
 INSERT INTO solturadb.soltura_associatedCompanies (name, addressId) VALUES 
-    ('FitLife Gym', 1),         -- Gimnasios
-    ('MediPlus', 2),            -- Salud
-    ('EduTech Academy', 3),     -- Educación
-    ('CinePlex', 4),            -- Entretenimiento
-    ('GastroClub', 5),          -- Gastronomía
-    ('MobilityPass', 6),        -- Transporte
-    ('WorkHub', 7);             -- Coworking
+    ('FitLife Gym', 1),         
+    ('MediPlus', 2),            
+    ('EduTech Academy', 3),     
+    ('CinePlex', 4),           
+    ('GastroClub', 5),         
+    ('MobilityPass', 6),        
+    ('WorkHub', 7);             
 
 -- 5. Tipos de información de contacto
 INSERT INTO solturadb.soltura_companyinfotypes (name) VALUES
@@ -152,37 +153,30 @@ DECLARE @contract_id INT = 1;
 DECLARE @service_names TABLE (serviceid INT, name VARCHAR(100), description VARCHAR(200), price DECIMAL(10,2), soltura_pct DECIMAL(5,2), company_pct DECIMAL(5,2));
 
 INSERT INTO @service_names VALUES
--- Gimnasio (FitLife)
 (1, 'Membresía Premium', 'Acceso completo a todas las instalaciones', 50.00, 0.20, 0.80),
 (1, 'Pase Mensual', 'Acceso mensual a gimnasios', 30.00, 0.15, 0.85),
 (1, 'Entrenamiento Personal', 'Sesiones con entrenador personal', 25.00, 0.25, 0.75),
 
--- Salud (MediPlus)
 (2, 'Consulta General', 'Consulta con médico general', 45.00, 0.25, 0.75),
 (2, 'Exámenes Básicos', 'Panel de exámenes básicos', 60.00, 0.20, 0.80),
 (2, 'Servicios Dentales', 'Limpieza y revisión dental', 55.00, 0.15, 0.85),
 
--- Educación (EduTech)
 (3, 'Curso Completo', 'Curso completo de cualquier idioma', 200.00, 0.30, 0.70),
 (3, 'Módulo Individual', 'Módulo individual de aprendizaje', 50.00, 0.25, 0.75),
 (3, 'Biblioteca Digital', 'Acceso a biblioteca digital', 15.00, 0.20, 0.80),
 
--- Entretenimiento (CinePlex)
 (4, 'Entrada Premium', 'Entrada a cualquier película premium', 15.00, 0.18, 0.82),
 (4, 'Combo Familiar', 'Combo para 4 personas con snacks', 40.00, 0.20, 0.80),
 (4, 'Pase VIP', 'Acceso a salas VIP', 20.00, 0.22, 0.78),
 
--- Gastronomía (GastroClub)
 (5, 'Descuento Restaurantes', 'Descuento en restaurantes de la cadena', 25.00, 0.15, 0.85),
 (5, 'Café Gratis', 'Café gratis en establecimientos asociados', 5.00, 0.10, 0.90),
 (5, 'Experiencia Gourmet', 'Degustación en restaurantes selectos', 45.00, 0.18, 0.82),
 
--- Transporte (MobilityPass)
 (6, 'Transporte Urbano', 'Acceso a transporte público ilimitado', 30.00, 0.12, 0.88),
 (6, 'Alquiler Vehículos', 'Descuento en alquiler de vehículos', 40.00, 0.15, 0.85),
 (6, 'Servicio Taxi', 'Descuento en servicios de taxi', 20.00, 0.10, 0.90),
 
--- Coworking (WorkHub)
 (7, 'Acceso Diario', 'Acceso diario a espacio de coworking', 15.00, 0.20, 0.80),
 (7, 'Membresía Mensual', 'Acceso mensual a espacios de trabajo', 120.00, 0.25, 0.75),
 (7, 'Sala de Reuniones', 'Uso de salas de reuniones', 30.00, 0.18, 0.82);
@@ -219,18 +213,15 @@ INSERT INTO solturadb.soltura_schedules (name, recurrencytype, endtype, repetiti
     ('Anual', 'Monthly', 'Event', 12, '2026-12-31');
 
 -- 12. Precios de planes en diferentes monedas
--- Usamos un loop para crear precios en diferentes monedas para cada suscripción
 DECLARE @subscription_count INT = 9;
 DECLARE @s INT = 1;
 
 WHILE @s <= @subscription_count
 BEGIN
-    -- Precio en USD
     INSERT INTO solturadb.soltura_planprices (amount, recurrencytype, posttime, endate, [current], currencyid, subscriptionid)
     VALUES 
     (9.99 + (@s * 10), 1, GETDATE(), '2026-01-01', 0x01, 1, @s);
     
-    -- Precio en CRC (convertir USD a CRC con tipo de cambio aproximado de 500)
     INSERT INTO solturadb.soltura_planprices (amount, recurrencytype, posttime, endate, [current], currencyid, subscriptionid)
     VALUES 
     ((9.99 + (@s * 10)) * 500, 1, GETDATE(), '2026-01-01', 0x01, 2, @s);
@@ -238,29 +229,26 @@ BEGIN
     SET @s = @s + 1;
 END
 
--- 13. Creación de planperson (relación entre planes y personas)
+-- 13. Creación de planperson 
 DECLARE @planprices_count INT;
 SELECT @planprices_count = COUNT(*) FROM solturadb.soltura_planprices;
 
 DECLARE @p INT = 1;
-DECLARE @maxplanperson INT = 25; -- Para tener 25 usuarios con suscripción
+DECLARE @maxplanperson INT = 25; 
 DECLARE @scheduleId INT;
 DECLARE @planpriceId INT;
 DECLARE @maxAccounts INT;
 
 WHILE @p <= @maxplanperson
 BEGIN
-    -- Obtener un scheduleId aleatorio (1-4)
     SET @scheduleId = 1 + ((@p - 1) % 4);
     
-    -- Obtener un planpriceId aleatorio
     SET @planpriceId = 1 + ((@p - 1) % @planprices_count);
     
-    -- Determinar maxAccounts basado en tipo de plan
     SET @maxAccounts = CASE 
-        WHEN @p % 3 = 0 THEN 4  -- Algunos son familiares
-        WHEN @p % 3 = 1 THEN 2  -- Algunos son para parejas 
-        ELSE 1                   -- El resto son individuales
+        WHEN @p % 3 = 0 THEN 4  
+        WHEN @p % 3 = 1 THEN 2  
+        ELSE 1                   
     END;
     
     INSERT INTO solturadb.soltura_planperson 
@@ -271,16 +259,14 @@ BEGIN
     SET @p = @p + 1;
 END
 
--- 14. Asignar usuarios a planes (25 usuarios con suscripción)
+-- 14. Asignar usuarios a planes 
 DECLARE @u INT = 1;
 DECLARE @planpersonId INT;
 
-WHILE @u <= 25  -- 25 usuarios con suscripción
+WHILE @u <= 25  
 BEGIN
-    -- Asignar usuario al plan (pueden haber múltiples usuarios por plan si es familiar)
     SET @planpersonId = 1 + ((@u - 1) % @maxplanperson);
     
-    -- Verificar que no excedemos el máximo de cuentas permitidas
     DECLARE @currentAccounts INT;
     SELECT @currentAccounts = COUNT(*) 
     FROM solturadb.soltura_planperson_users 
@@ -291,7 +277,6 @@ BEGIN
     FROM solturadb.soltura_planperson 
     WHERE planpersonid = @planpersonId;
     
-    -- Solo insertar si no excedemos el límite
     IF @currentAccounts < @maxPermittedAccounts
     BEGIN
         INSERT INTO solturadb.soltura_planperson_users (planpersonid, userid)
@@ -299,7 +284,6 @@ BEGIN
     END
     ELSE
     BEGIN
-        -- Si excedemos, buscar otro planperson que tenga espacio
         DECLARE @alternativePlanId INT;
         
         SELECT TOP 1 @alternativePlanId = pp.planpersonid
@@ -312,7 +296,6 @@ BEGIN
         WHERE ISNULL(counts.usercount, 0) < pp.maxaccounts
         ORDER BY NEWID();
         
-        -- Insertar en el plan alternativo
         INSERT INTO solturadb.soltura_planperson_users (planpersonid, userid)
         VALUES (@alternativePlanId, @u);
     END
@@ -321,7 +304,6 @@ BEGIN
 END
 
 -- 15. Creación de beneficios para los diferentes planes
--- Crear beneficios usando un procedimiento para mayor eficiencia
 DECLARE @planperson_count INT;
 SELECT @planperson_count = COUNT(*) FROM solturadb.soltura_planperson;
 
@@ -332,7 +314,7 @@ DECLARE @category_count INT;
 SELECT @category_count = COUNT(*) FROM solturadb.soltura_categorybenefits;
 
 DECLARE @b INT = 1;
-DECLARE @total_benefits INT = 75; -- Aproximadamente 3 beneficios por usuario
+DECLARE @total_benefits INT = 75; 
 
 WHILE @b <= @total_benefits
 BEGIN
@@ -342,7 +324,6 @@ BEGIN
     DECLARE @benefitTypeId INT = 1 + ((@b - 1) % 6);
     DECLARE @benefitSubTypeId INT = 1 + ((@b - 1) % 9);
     
-    -- Nombre y descripción del beneficio basados en categoría
     DECLARE @benefitName NVARCHAR(100);
     DECLARE @benefitDesc NVARCHAR(255);
     
@@ -380,13 +361,13 @@ BEGIN
     SET @b = @b + 1;
 END
 
--- 16. Registro de algunas redenciones de beneficios (corregido con reference2 no NULL)
+-- 16. Registro de algunas redenciones de beneficios 
 DECLARE @r INT = 1;
 DECLARE @redemptions_count INT = 20;
 DECLARE @benefit_count INT;
 
 SELECT @benefit_count = COUNT(*) FROM solturadb.soltura_benefits;
-DECLARE @user_count INT = 25; -- Solo usuarios con suscripción
+DECLARE @user_count INT = 25; 
 
 WHILE @r <= @redemptions_count
 BEGIN
@@ -394,7 +375,7 @@ BEGIN
     DECLARE @benefitId_r INT = 1 + ((@r - 1) % @benefit_count);
     DECLARE @redemptionMethodId INT = 1 + ((@r - 1) % 5);
     DECLARE @reference1 INT = 100000 + @r;
-    DECLARE @reference2 INT = 200000 + @r; -- Asegurándonos de que no sea NULL
+    DECLARE @reference2 INT = 200000 + @r; 
     DECLARE @value1 VARCHAR(100) = 'Redención ' + CAST(@r AS VARCHAR) + ' en empresa';
     DECLARE @value2 VARCHAR(100) = 'Detalle adicional ' + CAST(@r AS VARCHAR);
     
