@@ -466,6 +466,7 @@ ORDER BY s.description;
 ---
 # Demostraciones T-SQL
 1 y 2. Cursor local y global 
+
 3. Trigger
 4. sp_recompile
 5. MERGE
@@ -475,6 +476,11 @@ ORDER BY s.description;
 9. AVG
 10. TOP
 11. &&
+``` sql
+    -- && en T-SQL (explicación)
+PRINT '&& no se usa en T-SQL, en su lugar se utiliza AND para operaciones lógicas.';
+PRINT 'Ejemplo: WHERE condicion1 = 1 AND condicion2 = 2';
+```
 12. SCHEMABINDING 
 13. WITH ENCRYPTION
 14. EXECUTE AS
