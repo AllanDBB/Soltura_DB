@@ -18,10 +18,10 @@
 - **Isaac Villalobos Apellido2** - Carnet: !!!!
 ---
 
-# Documentación para el diseño
+# Documentacion
 
 ---
-# Población de Datos
+# LLenado
 Script de llenado de base de datos cumpliendo los requerimientos de monedas, usuarios, suscripciones, catálogos base del sistema, empresas proveedoras de servicios y los planes de servicios.
 
 script
