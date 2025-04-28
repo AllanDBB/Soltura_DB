@@ -2,13 +2,13 @@
 
 ## ÍNDICE
 1. [Integrantes](#integrantes)
-2. [Documentación para el diseño](#documentacion)
-3. [Población de Datos](#llenado)
-4. [Demostraciones T-SQL](#queries)
-5. [Mantenimiento de la Seguridad](#mantenimientoSeguridad)
+2. [Documentación para el diseño](#Documentaciónparaeldiseño)
+3. [Población de Datos](#PoblacióndeDatos)
+4. [Demostraciones T-SQL](#DemostracionesT-SQL)
+5. [Mantenimiento de la Seguridad](#mantenimientodelaSeguridad)
 6. [Consultas Misceláneas](#consultasMiscelaneas)
 7. [Concurrencia](#concurrencia)
-8. [Soltura ft. PaymentAssistant](#collab)
+8. [Soltura ft. PaymentAssistant](#Solyuraft.PaymentAssitant)
 
 ---
 # Integrantes:
