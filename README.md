@@ -2,13 +2,12 @@
 
 ## ÍNDICE
 1. [Integrantes](#integrantes)
-2. [Documentación para el diseño](#documentación-para-el-diseño)
-3. [Población de datos](#población-de-datos)
-4. [Demostraciones T-SQL](#demostraciones-t-sql)
-5. [Mantenimiento de la seguridad](#mantenimiento-de-la-seguridad)
-6. [Consultas misceláneas](#consultas-misceláneas)
-7. [Concurrencia](#concurrencia)
-8. [Soltura ft. PaymentAssistant](#soltura-ft-paymentassistant)
+2. [Población de datos](#población-de-datos)
+3. [Demostraciones T-SQL](#demostraciones-t-sql)
+4. [Mantenimiento de la seguridad](#mantenimiento-de-la-seguridad)
+5. [Consultas misceláneas](#consultas-misceláneas)
+6. [Concurrencia](#concurrencia)
+7. [Soltura ft. PaymentAssistant](#soltura-ft-paymentassistant)
 
 ---
 # Integrantes:
@@ -25,7 +24,6 @@
 Script de llenado de base de datos cumpliendo los requerimientos de monedas, usuarios, suscripciones, catálogos base del sistema, empresas proveedoras de servicios y los planes de servicios.
 
 ```sql
-
 USE soltura;
 GO
 
@@ -48,19 +46,20 @@ DELETE FROM dbo.soltura_benefitSubTypes;
 DELETE FROM dbo.soltura_benefitTypes;
 
 -- Resetear los contadores autoincrementables
-DBCC CHECKIDENT ('solturadb.soltura_redemptions', RESEED, 0);
-DBCC CHECKIDENT ('solturadb.soltura_benefits', RESEED, 0);
-DBCC CHECKIDENT ('solturadb.soltura_planperson', RESEED, 0);
-DBCC CHECKIDENT ('solturadb.soltura_planprices', RESEED, 0);
-DBCC CHECKIDENT ('solturadb.soltura_contractDetails', RESEED, 0);
-DBCC CHECKIDENT ('solturadb.soltura_contracts', RESEED, 0);
-DBCC CHECKIDENT ('solturadb.soltura_companiesContactinfo', RESEED, 0);
-DBCC CHECKIDENT ('solturadb.soltura_associatedCompanies', RESEED, 0);
-DBCC CHECKIDENT ('solturadb.soltura_schedules', RESEED, 0);
-DBCC CHECKIDENT ('solturadb.soltura_categorybenefits', RESEED, 0);
-DBCC CHECKIDENT ('solturadb.soltura_redemptionMethods', RESEED, 0);
-DBCC CHECKIDENT ('solturadb.soltura_companyinfotypes', RESEED, 0);
-DBCC CHECKIDENT ('solturadb.soltura_subscriptions', RESEED, 0);
+DBCC CHECKIDENT ('solturadb.soltura_redemptions', RESEED, 1);
+DBCC CHECKIDENT ('solturadb.soltura_benefits', RESEED, 1);
+DBCC CHECKIDENT ('solturadb.soltura_planperson', RESEED, 1);
+DBCC CHECKIDENT ('solturadb.soltura_planprices', RESEED, 1);
+DBCC CHECKIDENT ('solturadb.soltura_contractDetails', RESEED, 1);
+DBCC CHECKIDENT ('solturadb.soltura_contracts', RESEED, 1);
+DBCC CHECKIDENT ('solturadb.soltura_companiesContactinfo', RESEED, 1);
+DBCC CHECKIDENT ('solturadb.soltura_associatedCompanies', RESEED, 1);
+DBCC CHECKIDENT ('solturadb.soltura_schedules', RESEED, 1);
+DBCC CHECKIDENT ('solturadb.soltura_categorybenefits', RESEED, 1);
+DBCC CHECKIDENT ('solturadb.soltura_redemptionMethods', RESEED, 1);
+DBCC CHECKIDENT ('solturadb.soltura_companyinfotypes', RESEED, 1);
+DBCC CHECKIDENT ('solturadb.soltura_subscriptions', RESEED, 1);
+
 
 -- 1. Creación de monedas
 IF NOT EXISTS(SELECT 1 FROM solturadb.soltura_currency WHERE name = 'United States Dollar')
@@ -105,6 +104,32 @@ INSERT INTO solturadb.soltura_categorybenefits (name, enabled) VALUES
     ('Hospedaje', 0x01),
     ('Coworking', 0x01);
 
+INSERT INTO solturadb.soltura_countries (name, language, currencyid) VALUES 
+('United States', 'en', 1),  
+('Costa Rica', 'es', 2),   
+('Puerto Rico', 'es', 1), 
+('Panamá', 'es', 1);  
+       
+INSERT INTO solturadb.soltura_states (name, countryid) VALUES 
+('San José', 2),       
+('Alajuela', 2),
+('California', 1),
+('Texas', 1),
+('San Juan', 3),
+('Ciudad de Panamá', 4);
+
+INSERT INTO solturadb.soltura_cities (name, stateid) VALUES 
+('San José', 1),
+('Escazú', 1),
+('San Ramón', 2),
+('Grecia', 2),
+('Los Angeles', 3),
+('San Francisco', 3),
+('Dallas', 4),
+('Austin', 4),
+('Guaynabo', 5),
+('San Miguelito', 6);
+
 -- 4. Creación de empresas proveedoras de servicios 
 -- Inserción de direcciones
 INSERT INTO solturadb.soltura_addresses (line1, line2, zipcode, cityid, geoposition)
@@ -116,6 +141,29 @@ VALUES
     ('Paseo Colón', 'Plaza Gastro', '10105', 1, geometry::STGeomFromText('POINT(-84.07 9.93)', 4326)),
     ('Terminal Central', NULL, '10201', 3, geometry::STGeomFromText('POINT(-84.22 10.02)', 4326)),
     ('Zona de Negocios', 'Torre Profesional', '10301', 4, geometry::STGeomFromText('POINT(-84.33 10.09)', 4326));
+
+-- Inserción de usuarios
+DECLARE @i INT = 1;
+DECLARE @total_addresses INT;
+SELECT @total_addresses = COUNT(*) FROM solturadb.soltura_addresses;
+
+WHILE @i <= 30
+BEGIN
+    DECLARE @random_email NVARCHAR(100) = CONCAT('usuario', @i, '@gmail.com');
+    DECLARE @random_firstname NVARCHAR(50) = CONCAT('Nombre', @i);
+    DECLARE @random_lastname NVARCHAR(50) = CONCAT('Apellido', @i);
+    DECLARE @random_birthday DATE = DATEADD(DAY, -1 * FLOOR(RAND() * 365 * 30), GETDATE());
+    DECLARE @random_password VARBINARY(256) = HASHBYTES('SHA2_256', CONCAT('Contraseña', @i));
+    DECLARE @random_address_id INT = FLOOR(RAND() * @total_addresses) + 1;
+
+    INSERT INTO solturadb.soltura_users (email, firstname, lastname, birthday, password)
+    VALUES (@random_email, @random_firstname, @random_lastname, @random_birthday, @random_password);
+
+    INSERT INTO solturadb.soltura_useraddress (userid, addressid, useraddressid)
+    VALUES (SCOPE_IDENTITY(), @random_address_id, @i);
+
+    SET @i = @i + 1;
+END
 
 -- Inserción de empresas asociadas
 INSERT INTO solturadb.soltura_associatedCompanies (name, addressId) VALUES 
@@ -137,7 +185,7 @@ INSERT INTO solturadb.soltura_companyinfotypes (name) VALUES
 -- 6. Información de contacto para empresas
 -- Utilizando un procedimiento para generar información de contacto
 DECLARE @company_count INT = 7;
-DECLARE @i INT = 1;
+SET @i = 1;
 DECLARE @email_domains TABLE (domain VARCHAR(50));
 INSERT INTO @email_domains VALUES ('gmail.com'),('outlook.com'),('yahoo.com'),('company.com'),('business.com');
 
@@ -410,27 +458,11 @@ BEGIN
     INSERT INTO solturadb.soltura_redemptions
         (date, redemptionMethodsid, userid, benefitsid, reference1, reference2, value1, value2, checksum)
     VALUES
-        (DATEADD(DAY, -1 * (@r % 30), GETDATE()), @redemptionMethodId, @userId_r, @benefitId_r, @reference1, @reference2, @value1, @value2, 0x0123456789);
+        (DATEADD(DAY, -1 * (@r % 30), GETDATE()), @redemptionMethodId, @userId_r, @benefitId_r, @reference1, @reference2,
+         CONVERT(varbinary(100), @value1), CONVERT(varbinary(100), @value2), 0x0123456789);
         
     SET @r = @r + 1;
 END
-
--- 17. Crear índices para mejorar el rendimiento
-IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name='IX_soltura_planperson_users_userid' AND object_id = OBJECT_ID('solturadb.soltura_planperson_users'))
-CREATE NONCLUSTERED INDEX IX_soltura_planperson_users_userid 
-ON solturadb.soltura_planperson_users(userid);
-
-IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name='IX_soltura_benefits_categoryid' AND object_id = OBJECT_ID('solturadb.soltura_benefits'))
-CREATE NONCLUSTERED INDEX IX_soltura_benefits_categoryid 
-ON solturadb.soltura_benefits(categorybenefitsid);
-
-IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name='IX_soltura_benefits_typeid' AND object_id = OBJECT_ID('solturadb.soltura_benefits'))
-CREATE NONCLUSTERED INDEX IX_soltura_benefits_typeid 
-ON solturadb.soltura_benefits(benefitTypeId);
-
-IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name='IX_soltura_redemptions_userid' AND object_id = OBJECT_ID('solturadb.soltura_redemptions'))
-CREATE NONCLUSTERED INDEX IX_soltura_redemptions_userid 
-ON solturadb.soltura_redemptions(userid);
 
 -- Verificación final de datos
 SELECT 'Monedas' AS Tabla, COUNT(*) AS Cantidad FROM solturadb.soltura_currency
