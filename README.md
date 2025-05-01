@@ -1,18 +1,28 @@
 # Soltura_DB
 
 ## ÍNDICE
-1. [Integrantes](#integrantes)
-2. [Población de datos](#población-de-datos)
-3. [Demostraciones T-SQL](#demostraciones-t-sql)
-4. [Mantenimiento de la seguridad](#mantenimiento-de-la-seguridad)
-5. [Consultas misceláneas](#consultas-misceláneas)
-6. [Concurrencia](#concurrencia)
-7. [Soltura ft. PaymentAssistant](#soltura-ft-paymentassistant)
+- [Soltura\_DB](#soltura_db)
+  - [ÍNDICE](#índice)
+- [Integrantes:](#integrantes)
+- [Documentación para el diseño](#documentación-para-el-diseño)
+- [Población de datos](#población-de-datos)
+- [Demostraciones T-SQL](#demostraciones-t-sql)
+  - [1 y 2. Cursor local y global](#1-y-2-cursor-local-y-global)
+  - [3. Trigger](#3-trigger)
+  - [4. sp\_recompile y merge (1)](#4-sp_recompile-y-merge-1)
+      - [1. SQL Server Management Studio → SQL Server Agent → Jobs](#1-sql-server-management-studio--sql-server-agent--jobs)
+      - [2. Click derecho → New Job y Name: "Soltura\_RecompileSPs\_Weekly"](#2-click-derecho--new-job-y-name-soltura_recompilesps_weekly)
+      - [3. Steps: Agregar paso con "EXEC solturadb.sp\_RecompileAllSPs"](#3-steps-agregar-paso-con-exec-solturadbsp_recompileallsps)
+      - [4. Schedule: Configurar para cada domingo a las 2:00 AM](#4-schedule-configurar-para-cada-domingo-a-las-200-am)
+- [Mantenimiento de la Seguridad](#mantenimiento-de-la-seguridad)
+- [Consultas Misceláneas](#consultas-misceláneas)
+- [Concurrencia](#concurrencia)
+- [Soltura ft. PaymentAssistant](#soltura-ft-paymentassistant)
 
 ---
 # Integrantes:
 - **Daniel Arce Campos** - Carnet: 2024174489
-- **Allan David Bolaños Barrientos** - Carnet: !!!
+- **Allan David Bolaños Barrientos** - Carnet: 2024145458
 - **Natalia Orozco Delgado** - Carnet: 2024099161
 - **Isaac Villalobos Apellido2** - Carnet: !!!!
 ---
@@ -21,6 +31,7 @@
 
 ---
 # Población de datos
+
 Script de llenado de base de datos cumpliendo los requerimientos de monedas, usuarios, suscripciones, catálogos base del sistema, empresas proveedoras de servicios y los planes de servicios.
 
 ```sql
@@ -496,8 +507,9 @@ ORDER BY s.description;
 ```
 
 ---
+
 # Demostraciones T-SQL
-1 y 2. Cursor local y global 
+## 1 y 2. Cursor local y global 
 ```sql
 USE soltura;
 GO
@@ -570,15 +582,195 @@ PRINT 'FETCH NEXT FROM globalBenefitCursor INTO @gb;';
 PRINT 'PRINT @gb;';
 PRINT '> Se imprime el primer beneficio del cursor global';
 ```
-3. Trigger
-4. sp_recompile
-5. MERGE
-6. COALESCE
-7. SUBSTRING
-8. LTRIM
-9. AVG
-10. TOP
-11. &&
+## 3. Trigger
+## 4. sp_recompile y merge (1)
+En este script, el "SP_RECOMPILE" se está utilizando para forzar la recompilación del plan de ejecución almacenado.
+Ya que se están modificando los datos, esto sucede, que si más adelante, existen datos masivos, ese incremento, el SQL server podría usar un plan de ejecucuón obsoleto y modificar mal los datos. Entonces, cómo dependen entre sí las estadísticas, lo mejor es actualizar el plan que está en el caché
+
+Y el merge garantaiza que todos los precios se actualicen en una única transacción. Es decir TODOS o ninguno, entonces, evita hacer múltiples operaciones.
+```sql
+
+-- Resulta y acontece que el CEO tomo una mala decisión y quiere ganar más plata, entonces va a suber los precios de los planes en un n% (en este ejemplo 5)
+-- Así que profe, observe la magia, cómo ganamos más dineros.
+
+-- Esta tabla se crea temporalmente, para almacenar los nuevos precios de los planes
+CREATE TABLE #NuevosPreciosPlan (
+    planpricesid INT PRIMARY KEY,
+    nueva_cantidad DECIMAL(10,2),
+    ultima_actualizacion DATETIME
+);
+
+-- Ahora insertamos los nuevos precios en la tabla temporal basada en los precios actuales
+INSERT INTO #NuevosPreciosPlan (planpricesid, nueva_cantidad, ultima_actualizacion)
+SELECT 
+    pp.planpricesid,
+    pp.amount * 1.05, -- 5% de aumento por inflación (Wink wink "inflación")....
+    GETDATE()
+FROM solturadb.soltura_planprices pp
+WHERE pp.[current] = 0x01
+  AND pp.endate > GETDATE(); -- Importante solo los planes activos
+
+-- Aquí es dónde se usa el sp_recompile para forzar la recompilación de los planes de precios
+EXEC sp_recompile 'solturadb.soltura_planprices';
+
+-- Y ahora actualizamos los precios de los planes y mandamos los cambios
+DECLARE @AuditChanges TABLE (
+    planpricesid INT,
+    precio_anterior DECIMAL(10,2),
+    precio_nuevo DECIMAL(10,2),
+    fecha_cambio DATETIME
+);
+
+-- El merge aquí, es quien se encarga de actualizar los precios de los planes
+MERGE solturadb.soltura_planprices AS target
+USING #NuevosPreciosPlan AS source -- Basado en la tabla temporal
+ON (target.planpricesid = source.planpricesid)
+WHEN MATCHED THEN
+    UPDATE SET 
+        target.amount = source.nueva_cantidad,
+        target.posttime = source.ultima_actualizacion
+OUTPUT 
+    inserted.planpricesid, 
+    deleted.amount, 
+    inserted.amount, 
+    GETDATE()
+INTO @AuditChanges;
+
+-- Originalmente en nuestro diagrama, no habíamos pensando en un historial de precios,
+-- así que aquí lo creamos (no nos baje por favor.)
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'soltura_price_history' AND schema_id = SCHEMA_ID('solturadb'))
+BEGIN
+    CREATE TABLE solturadb.soltura_price_history (
+        historyid INT IDENTITY(1,1) PRIMARY KEY,
+        planpricesid INT NOT NULL,
+        precio_anterior DECIMAL(10,2) NOT NULL,
+        precio_nuevo DECIMAL(10,2) NOT NULL,
+        fecha_cambio DATETIME NOT NULL,
+        usuario_cambio NVARCHAR(128) DEFAULT SUSER_SNAME(),
+        FOREIGN KEY (planpricesid) REFERENCES solturadb.soltura_planprices(planpricesid)
+    );
+END
+
+-- Registrar los cambios en la tabla de historial
+INSERT INTO solturadb.soltura_price_history (planpricesid, precio_anterior, precio_nuevo, fecha_cambio)
+SELECT planpricesid, precio_anterior, precio_nuevo, fecha_cambio
+FROM @AuditChanges;
+
+-- Recompilamos los objetos que dependen de la tabla de precios
+EXEC sp_recompile 'solturadb.soltura_benefits';
+
+SELECT 
+    pp.planpricesid,
+    s.description AS 'Plan',
+    c.symbol AS 'Moneda',
+    ph.precio_anterior AS 'Precio Anterior',
+    pp.amount AS 'Nuevo Precio',
+    FORMAT((pp.amount - ph.precio_anterior) / ph.precio_anterior, 'P2') AS 'Porcentaje Incremento',
+    ph.fecha_cambio AS 'Fecha Actualización'
+FROM solturadb.soltura_planprices pp
+JOIN solturadb.soltura_price_history ph ON pp.planpricesid = ph.planpricesid
+JOIN solturadb.soltura_subscriptions s ON pp.subscriptionid = s.subscriptionid
+JOIN solturadb.soltura_currency c ON pp.currencyid = c.currencyid
+WHERE ph.fecha_cambio = (SELECT MAX(fecha_cambio) FROM solturadb.soltura_price_history)
+ORDER BY s.description, c.symbol;
+
+-- Limpiar la tabla temporal después de usarla (No hay que dejar evidencias)....
+DROP TABLE #NuevosPreciosPlan;
+```
+
+SP_RECOMPILE SOLO:
+En este usamos el procedimiento para forzar la recompilación de TODOS los planes de ejecución almacenados en caché. Pero la pregunta es 
+¿Cómo recompilar todos los SPs existentes cada cierto tiempo?
+
+Se puede crear un procedimiento master: en este caso el procedimiento sp_RecompileAllSPs que utiliza cursores para iterar sobre:
+- Todos los procedimientos almacenados personalizados
+- Todas las vistas indexadas
+  
+Y luego sería programar un mantenimiento para ejecutarse automáticamente:
+
+#### 1. SQL Server Management Studio → SQL Server Agent → Jobs 
+
+![SQL server agent jobs](assets/image-1.png)
+
+#### 2. Click derecho → New Job y Name: "Soltura_RecompileSPs_Weekly"
+![alt text](assets/image.png)
+
+#### 3. Steps: Agregar paso con "EXEC solturadb.sp_RecompileAllSPs"
+![alt text](assets/image-2.png)
+
+#### 4. Schedule: Configurar para cada domingo a las 2:00 AM
+![alt text](assets/image-3.png)
+```sql
+USE soltura;
+GO
+
+-- Procedimiento simple para recompilar todos los SPs
+CREATE OR ALTER PROCEDURE solturadb.sp_RecompileAllSPs
+AS
+BEGIN
+    SET NOCOUNT ON;
+    PRINT 'Iniciando recompilación: ' + CONVERT(VARCHAR, GETDATE(), 120);
+    
+    -- Cursor simple para recorrer todos los procedimientos
+    DECLARE @sp_name NVARCHAR(255);
+    DECLARE @sql NVARCHAR(500);
+    DECLARE @count INT = 0;
+    
+    -- Seleccionar solo procedimientos personalizados (no de sistema)
+    DECLARE sp_cursor CURSOR FOR 
+        SELECT SCHEMA_NAME(schema_id) + '.' + name 
+        FROM sys.procedures 
+        WHERE is_ms_shipped = 0;
+    
+    OPEN sp_cursor;
+    FETCH NEXT FROM sp_cursor INTO @sp_name;
+    
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        SET @sql = N'EXEC sp_recompile ''' + @sp_name + '''';
+        EXEC sp_executesql @sql;
+        
+        SET @count = @count + 1;
+        FETCH NEXT FROM sp_cursor INTO @sp_name;
+    END
+    
+    CLOSE sp_cursor;
+    DEALLOCATE sp_cursor;
+    
+    -- También recompilar vistas indexadas
+    DECLARE view_cursor CURSOR FOR 
+        SELECT SCHEMA_NAME(v.schema_id) + '.' + v.name 
+        FROM sys.views v
+        JOIN sys.indexes i ON v.object_id = i.object_id
+        WHERE i.index_id > 0;
+    
+    OPEN view_cursor;
+    FETCH NEXT FROM view_cursor INTO @sp_name;
+    
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        SET @sql = N'EXEC sp_recompile ''' + @sp_name + '''';
+        EXEC sp_executesql @sql;
+        
+        SET @count = @count + 1;
+        FETCH NEXT FROM view_cursor INTO @sp_name;
+    END
+    
+    CLOSE view_cursor;
+    DEALLOCATE view_cursor;
+    
+    PRINT 'Recompilación completada: ' + CONVERT(VARCHAR, GETDATE(), 120);
+    PRINT 'Total objetos recompilados: ' + CAST(@count AS VARCHAR);
+END;
+GO
+```
+
+1. COALESCE
+2. SUBSTRING
+3. LTRIM
+4.  AVG
+5.  TOP
+6.  &&
 ``` sql
     -- && en T-SQL (explicación)
 && no se usa en T-SQL, en su lugar se utiliza AND para operaciones lógicas.
