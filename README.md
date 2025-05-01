@@ -14,6 +14,13 @@
       - [2. Click derecho → New Job y Name: "Soltura\_RecompileSPs\_Weekly"](#2-click-derecho--new-job-y-name-soltura_recompilesps_weekly)
       - [3. Steps: Agregar paso con "EXEC solturadb.sp\_RecompileAllSPs"](#3-steps-agregar-paso-con-exec-solturadbsp_recompileallsps)
       - [4. Schedule: Configurar para cada domingo a las 2:00 AM](#4-schedule-configurar-para-cada-domingo-a-las-200-am)
+      - [5. Finalmente se verá así:](#5-finalmente-se-verá-así)
+  - [5 COALESCE, SUBSTRING, LTRIM, SCHEMABINDING](#5-coalesce-substring-ltrim-schemabinding)
+  - [6 AVG](#6-avg)
+  - [7 TOP](#7-top)
+  - [8 WITH ENCRYPTION](#8-with-encryption)
+  - [9 EXECUTE AS y DISTINCT](#9-execute-as-y-distinct)
+  - [10 UNION](#10-union)
 - [Mantenimiento de la Seguridad](#mantenimiento-de-la-seguridad)
 - [Consultas Misceláneas](#consultas-misceláneas)
 - [Concurrencia](#concurrencia)
@@ -700,6 +707,11 @@ Y luego sería programar un mantenimiento para ejecutarse automáticamente:
 
 #### 4. Schedule: Configurar para cada domingo a las 2:00 AM
 ![alt text](assets/image-3.png)
+
+#### 5. Finalmente se verá así:
+![alt text](assets/image-4.png)
+
+IMPORTANTE: SI nota algún error a la hora de correr el SQL agent, revise scripts/fixAgentSQL.sql.
 ```sql
 USE soltura;
 GO
@@ -764,27 +776,196 @@ BEGIN
 END;
 GO
 ```
+---
+## 5 COALESCE, SUBSTRING, LTRIM, SCHEMABINDING
+Aquí usamos efectivamente el schemabinding para enlazar la vista directamente al esquema de las tablas subyacentes.
+Luego el coalesce para manejar valores NULL proporcionando un valor alternativo.
+El LTRIM para eliminar espacios en blanco del lado izquierdo de una cadena.
+Y el substring para extraer una parte específica de una cadena, en este caso el dominio de correo electrónico.
+```sql
+--
+-- Este script crea una vista que muestra la información de contacto de las empresas asociadas,
+-- usamos: schemabinding, coalesce, ltrim, substring.
+--
+--
+CREATE VIEW solturadb.vw_CompanyContactInfo 
+WITH SCHEMABINDING 
+AS
+SELECT 
+    ac.associatedCompaniesid,
+    ac.name AS CompanyName,
+    -- Usa COALESCE para mostrar "Sin información" si el valor es NULL y que no se muestre el NULL en la consulta
+    COALESCE(
+        -- Usa LTRIM para eliminar espacios iniciales en los valores (Esto porque a veces vienen con espacios)
+        LTRIM(CAST(ci.value AS NVARCHAR(255))), 
+        'Sin información'
+    ) AS ContactValue,
+    CASE 
+        WHEN cit.name = 'Email' THEN 
+            -- Usa SUBSTRING para extraer el dominio después del @ (Para que salga bien bonito el dominio)
+            CASE 
+                WHEN CHARINDEX('@', CAST(ci.value AS NVARCHAR(255))) > 0 
+                THEN SUBSTRING(
+                    CAST(ci.value AS NVARCHAR(255)), 
+                    CHARINDEX('@', CAST(ci.value AS NVARCHAR(255))) + 1,
+                    LEN(CAST(ci.value AS NVARCHAR(255))) - CHARINDEX('@', CAST(ci.value AS NVARCHAR(255)))
+                )
+                ELSE 'Formato inválido'
+            END
+        ELSE NULL
+    END AS EmailDomain,
+    cit.name AS ContactType,
+    ci.lastupdate AS LastUpdated
+FROM solturadb.soltura_associatedCompanies ac
+JOIN solturadb.soltura_companiesContactinfo ci ON ac.associatedCompaniesid = ci.associatedCompaniesid
+JOIN solturadb.soltura_companyinfotypes cit ON ci.companyinfotypeId = cit.companyinfotypeId
+WHERE ci.enabled = 0x01
+GO
 
-1. COALESCE
-2. SUBSTRING
-3. LTRIM
-4.  AVG
-5.  TOP
-6.  &&
+-- Consulta que utiliza la vista
+SELECT 
+    CompanyName,
+    MAX(CASE WHEN ContactType = 'Email' THEN ContactValue END) AS Email,
+    MAX(CASE WHEN ContactType = 'Email' THEN EmailDomain END) AS Domain,
+    MAX(CASE WHEN ContactType = 'Teléfono' THEN ContactValue END) AS Phone,
+    MAX(CASE WHEN ContactType = 'Sitio Web' THEN ContactValue END) AS Website,
+    MAX(CASE WHEN ContactType = 'Horario' THEN ContactValue END) AS Schedule
+FROM solturadb.vw_CompanyContactInfo
+GROUP BY CompanyName
+ORDER BY CompanyName;
+```
+## 6 AVG
+Con el AVG estamos agrupando para sacar un promedio de montos pagados.
+```sqlv
+-- AVG con agrupamiento (promedio de montos pagados por suscripción)
+SELECT 
+    s.description AS 'Plan',
+    c.acronym AS 'Moneda',
+    AVG(pp.amount) AS 'Precio Promedio'
+FROM solturadb.soltura_planprices pp
+JOIN solturadb.soltura_subscriptions s ON pp.subscriptionid = s.subscriptionid
+JOIN solturadb.soltura_currency c ON pp.currencyid = c.currencyid
+GROUP BY s.description, c.acronym
+ORDER BY AVG(pp.amount) DESC;
+```
+## 7 TOP
+Con el TOP estamos ahora sacando los planes más populars.
+```sql
+-- TOP para mostrar top 5 planes más populares
+SELECT TOP 5 
+    s.description AS 'Plan',
+    COUNT(ppu.userid) AS 'Número de Usuarios'
+FROM solturadb.soltura_subscriptions s
+JOIN solturadb.soltura_planprices pp ON s.subscriptionid = pp.subscriptionid
+JOIN solturadb.soltura_planperson p ON pp.planpricesid = p.planpricesid
+JOIN solturadb.soltura_planperson_users ppu ON p.planpersonid = ppu.planpersonid
+GROUP BY s.description
+ORDER BY COUNT(ppu.userid) DESC;
+```
+3.  &&
 ``` sql
     -- && en T-SQL (explicación)
 && no se usa en T-SQL, en su lugar se utiliza AND para operaciones lógicas.
 Ejemplo: WHERE condicion1 = 1 AND condicion2 = 2
 
 ```
-12. SCHEMABINDING 
-13. WITH ENCRYPTION
-14. EXECUTE AS
-15. UNION 
-16. DISTINCT 
+## 8 WITH ENCRYPTION
+## 9 EXECUTE AS y DISTINCT
+En el procedimiento utilizamos WITH EXECUTE AS 'AuditUser' para ejecutar todo el código con los permisos limitados del usuario AuditUser 
+y aplicamos DISTINCT en la consulta principal (COUNT(DISTINCT r.redemptionid)) para asegurar que cada redención se cuente exactamente una vez,
 
+```sql
+-- Script para almacenar la auditoría de redenciones
+-- En este estamos usando: executa as y distinct.
+
+USE soltura;
+GO
+
+-- Vamos a crear un usuario, con el que podamos hacer una auditoría y probar el EXECUTE AS
+-- se le dan solo permisos de lectura a las tablas de redenciones, usuarios y beneficios.
+IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = 'AuditUser')
+BEGIN
+    CREATE USER AuditUser WITHOUT LOGIN;
+    
+    -- Dar permisos mínimos
+    GRANT SELECT ON solturadb.soltura_redemptions TO AuditUser;
+    GRANT SELECT ON solturadb.soltura_users TO AuditUser;
+    GRANT SELECT ON solturadb.soltura_benefits TO AuditUser;
+    GRANT INSERT ON solturadb.soltura_logs TO AuditUser;
+END
+GO
+
+-- Procedimiento con EXECUTE AS que utiliza la tabla de logs que existen
+CREATE OR ALTER PROCEDURE solturadb.sp_SimpleAudit
+    @days INT = 7
+WITH EXECUTE AS 'AuditUser'
+AS
+BEGIN
+    DECLARE @log_description NVARCHAR(120); -- Descripción del log
+    DECLARE @total_count INT; -- Total de redenciones en el período
+    DECLARE @most_redeemed_benefit_id INT; -- ID del beneficio más redimido
+    DECLARE @most_active_user_id INT; -- ID del usuario más activo
+    
+    SELECT @total_count = COUNT(DISTINCT r.redemptionid) -- OJO estamos el distinct para evitar contar redenciones duplicadas :D
+    FROM solturadb.soltura_redemptions r
+    WHERE r.date >= DATEADD(DAY, -@days, GETDATE());
+    
+    -- Esto solo es para buscar el beneficio más redimido
+    SELECT TOP 1 @most_redeemed_benefit_id = benefitsid
+    FROM solturadb.soltura_redemptions
+    WHERE date >= DATEADD(DAY, -@days, GETDATE())
+    GROUP BY benefitsid
+    ORDER BY COUNT(*) DESC;
+    
+    -- Buscar el usuario más activio
+    SELECT TOP 1 @most_active_user_id = userid
+    FROM solturadb.soltura_redemptions
+    WHERE date >= DATEADD(DAY, -@days, GETDATE())
+    GROUP BY userid
+    ORDER BY COUNT(*) DESC;
+    
+    SET @log_description = 'Audit: ' + CAST(@total_count AS VARCHAR) + ' redemptions in last ' + CAST(@days AS VARCHAR) + ' days';
+    
+    INSERT INTO solturadb.soltura_logs
+       (description, posttime, computer, username, trace,
+        referenceid1, referenceid2, value1, value2,
+        checksum, logtypesid, logsourcesid, logseverityid)
+    VALUES
+       (@log_description,
+        GETDATE(),
+        HOST_NAME(),
+        ORIGINAL_LOGIN(),
+        'EXECUTE AS Audit',
+        @most_active_user_id,  -- referenceid1 = El usuario más activo
+        @most_redeemed_benefit_id,  -- referenceid2 = El beneficio más redimido
+        @total_count,  -- value1 = total de redenciones
+        @days,
+        HASHBYTES('SHA2_256', @log_description),
+        1,  
+        1,  
+        1   
+       );
+       
+    SELECT 
+        'Executing as: ' + USER_NAME() AS ExecutionContext,
+        @total_count AS TotalRedemptions,
+        @most_active_user_id AS MostActiveUserID,
+        @most_redeemed_benefit_id AS MostRedeemedBenefitID,
+        'Audit log created successfully' AS Status;
+END;
+GO
+
+-- Dar permiso de ejecución al procedimiento almacenado
+GRANT EXECUTE ON solturadb.sp_SimpleAudit TO PUBLIC;
+GO
+
+-- Ejecutar con distintos períodos de tiempo al sp 
+EXEC solturadb.sp_SimpleAudit @days = 30;
+```
+## 10 UNION 
 
 ---
+
 # Mantenimiento de la Seguridad
 
 
