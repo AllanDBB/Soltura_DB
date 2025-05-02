@@ -590,6 +590,37 @@ PRINT 'PRINT @gb;';
 PRINT '> Se imprime el primer beneficio del cursor global';
 ```
 ## 3. Trigger
+En este script, se crea un trigger, que consiste en que cada vez que se crea un nuevo contrato se automatiza la creación del contract detail con la información del contrado recién insertado. Alguno de los valores se ponen de manera predeterminada para que luego segun el acuerdo se ajusta los precios y el porcentaje. La idea del trigger es facilitar a Soltura la tarea de tener que crear la tabla de contract details, sino que ya se crea y solo editan los datos del precio y porcentajes
+```sql
+CREATE TRIGGER trg_insert_default_detail
+ON solturadb.soltura_contracts
+--Este trigger se ejecuta después de insertar un nuevo contrato 
+AFTER INSERT
+AS
+BEGIN
+    --Insertamos las filas en la tabla de detalles de contrato
+    INSERT INTO solturadb.soltura_contractDetails (name, description, contractid, price, solturaPercentage, companyPercentage)
+    SELECT 
+        --Ponemos datos por defecto para el detalle del contrato
+        --Lo que se busca es que SolturaDB no tenga que crear un contractDetail, sino solo editrar sus datos segun los acuerdos
+        'Detalle inicial', 
+        'Detalle automático generado al crear el contrato', 
+        i.contractid, 
+        0.00, 
+        0.00, 
+        0.00  
+    FROM inserted i; --Se insertan los detalles con los datos del contrado recien insertado
+END;
+GO
+
+--Insertamos un contrato para probar el trigger
+INSERT INTO solturadb.soltura_contracts (name, date, expirationdate, associatedCompaniesid)
+VALUES 
+('Contrato Prueba Trigger', '2023-10-01', '2024-10-01', 1);
+GO
+SELECT * FROM solturadb.soltura_contractDetails;
+```
+
 ## 4. sp_recompile y merge (1)
 En este script, el "SP_RECOMPILE" se está utilizando para forzar la recompilación del plan de ejecución almacenado.
 Ya que se están modificando los datos, esto sucede, que si más adelante, existen datos masivos, ese incremento, el SQL server podría usar un plan de ejecucuón obsoleto y modificar mal los datos. Entonces, cómo dependen entre sí las estadísticas, lo mejor es actualizar el plan que está en el caché
