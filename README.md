@@ -9,7 +9,7 @@
 - [Demostraciones T-SQL](#demostraciones-t-sql)
   - [1 y 2. Cursor local y global](#1-y-2-cursor-local-y-global)
   - [3. Trigger](#3-trigger)
-  - [4. sp\_recompile y merge (1)](#4-sp_recompile-y-merge-1)
+  - [4. MERGE Y SP\_RECOMPILE.](#4-merge-y-sp_recompile)
       - [1. SQL Server Management Studio → SQL Server Agent → Jobs](#1-sql-server-management-studio--sql-server-agent--jobs)
       - [2. Click derecho → New Job y Name: "Soltura\_RecompileSPs\_Weekly"](#2-click-derecho--new-job-y-name-soltura_recompilesps_weekly)
       - [3. Steps: Agregar paso con "EXEC solturadb.sp\_RecompileAllSPs"](#3-steps-agregar-paso-con-exec-solturadbsp_recompileallsps)
@@ -32,7 +32,6 @@
     - [Crear llave simétrica:](#crear-llave-simétrica)
     - [Ahora para cifrar con la llave:](#ahora-para-cifrar-con-la-llave)
     - [Para descrifrar usando las llaves:](#para-descrifrar-usando-las-llaves)
-  - [SELECT @Resultado AS PasswordCorrecto;](#select-resultado-as-passwordcorrecto)
 - [Consultas Misceláneas](#consultas-misceláneas)
 - [Concurrencia](#concurrencia)
 - [Soltura ft. PaymentAssistant](#soltura-ft-paymentassistant)
@@ -632,7 +631,10 @@ GO
 SELECT * FROM solturadb.soltura_contractDetails;
 ```
 
-## 4. sp_recompile y merge (1)
+## 4. MERGE Y SP_RECOMPILE.
+
+En este primero funciona, el merge como principal, en el segundo ya hablamos del SP_Recompile.
+
 En este script, el "SP_RECOMPILE" se está utilizando para forzar la recompilación del plan de ejecución almacenado.
 Ya que se están modificando los datos, esto sucede, que si más adelante, existen datos masivos, ese incremento, el SQL server podría usar un plan de ejecucuón obsoleto y modificar mal los datos. Entonces, cómo dependen entre sí las estadísticas, lo mejor es actualizar el plan que está en el caché
 
