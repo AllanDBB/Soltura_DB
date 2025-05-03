@@ -33,6 +33,12 @@
     - [Ahora para cifrar con la llave:](#ahora-para-cifrar-con-la-llave)
     - [Para descrifrar usando las llaves:](#para-descrifrar-usando-las-llaves)
 - [Consultas Misceláneas](#consultas-misceláneas)
+  - [Vista indexada dinámica](#vista-indexada-dinámica)
+  - [Procedimiento almacenado transaccional](#procedimiento-almacenado-transaccional)
+  - [Consulta con CASE para agrupamiento](#consulta-con-case-para-agrupamiento)
+  - [Consulta compleja optimizada](#consulta-compleja-optimizada)
+  - [Consulta con operaciones EXCEPT Y INTERSECT](#consulta-con-operaciones-except-y-intersect)
+  - [Procedimientos almacenados anidados](#procedimientos-almacenados-anidados)
   - [Consulta sobre obtener un JSON](#consulta-sobre-obtener-un-json)
   - [SP transaccional que Actualice los contratos](#sp-transaccional-que-actualice-los-contratos)
   - [Consulta y exportar a CSV.](#consulta-y-exportar-a-csv)
@@ -1295,7 +1301,7 @@ SELECT @Resultado AS PasswordCorrecto;
 ```
 ---
 # Consultas Misceláneas
-## Crear una vista indexada con al menos 4 tablas (ej. usuarios, suscripciones, pagos, servicios). La vista debe ser dinámica, no una vista materializada con datos estáticos. Demuestre que si es dinámica.
+## Vista indexada dínamica
 ```sql
 --La vista indexada
 CREATE VIEW solturadb.vw_UserSubscriptionDetails
@@ -1350,7 +1356,7 @@ WHERE planpersonid = 1;
 GO
 ```
 
-## Crear un procedimiento almacenado transaccional que realice una operación del sistema, relacionado a subscripciones, pagos, servicios, transacciones o planes, y que dicha operación requiera insertar y/o actualizar al menos 3 tablas.
+## Procedimiento almacenado transaccional
 
 ```sql
 
@@ -1416,7 +1422,7 @@ SELECT * FROM solturadb.soltura_planperson WHERE planpricesid = (SELECT planpric
 
 ```
 
-## Escribir un SELECT que use CASE para crear una columna calculada que agrupe dinámicamente datos (por ejemplo, agrupar cantidades de usuarios por plan en rangos de monto, no use este ejemplo).
+## Consulta con CASE para agrupamiento
 
 ```sql
 
@@ -1448,7 +1454,7 @@ ORDER BY
     TipoPlan, [Plan];
 ```
 
-## Imagine una cosulta que el sistema va a necesitar para mostrar cierta información, o reporte o pantalla, y que esa consulta vaya a requerir: 4 JOINs entre tablas, 2 funciones agregadas (ej. SUM, AVG), 3 subconsultas or 3 CTEs, Un CASE, CONVERT, ORDER BY, HAVING, una función escalar, y operadores como IN, NOT IN, EXISTS. Escriba dicha consulta y ejecutela con el query analizer, utilizando el analizador de pesos y costos del plan de ejecución, reacomode la consulta para que sea más eficiente sin necesidad de agregar nuevos índices.
+## Consulta compleja optimizada
 
 ```sql
 
@@ -1610,7 +1616,7 @@ ORDER BY
 ```
 
 
-## Crear una consulta con al menos 3 JOINs que analice información donde podría ser importante obtener un SET DIFFERENCE y un INTERSECTION
+## Consulta con operaciones EXCEPT Y INTERSECT
 
 ```sql
 WITH UsuariosConPlanes AS (
@@ -1677,7 +1683,7 @@ SELECT
 FROM RedencionesSinPlanes;
 ```
 
-## Crear un procedimiento almacenado transaccional que llame a otro SP transaccional, el cual a su vez llame a otro SP transaccional. Cada uno debe modificar al menos 2 tablas. Se debe demostrar que es posible hacer COMMIT y ROLLBACK con ejemplos exitosos y fallidos sin que haya interrumpción de la ejecución correcta de ninguno de los SP en ninguno de los niveles del llamado.
+## Procedimientos almacenados anidados
 ```sql
 USE soltura;
 GO
