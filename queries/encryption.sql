@@ -1,18 +1,22 @@
+DROP PROCEDURE IF EXISTS storageprocedureenc;
+GO
 
--- WITH ENCRYPTION para proteger el código del SP
-CREATE OR ALTER PROCEDURE solturadb.sp_SecretBusinessLogic
-WITH ENCRYPTION
+CREATE PROCEDURE storageprocedureenc 
+WITH ENCRYPTION 
 AS
 BEGIN
-    -- Este procedimiento contiene lógica de negocio confidencial
-    -- y su código ahora está protegido contra inspección
-    SELECT TOP 5 * FROM solturadb.soltura_benefits 
-    ORDER BY NEWID(); -- Solo como ejemplo
-    
-    PRINT 'La lógica de negocio confidencial ha sido ejecutada';
+	SELECT * 
+    FROM solturadb.soltura_users
+    ORDER BY solturadb.soltura_users.userid ASC;  
+
+    PRINT 'EJECUTADO';
 END;
 GO
 
--- Intentar ver el código (esto no mostrará el código, solo NULL)
-PRINT 'Intentando ver el código encriptado:';
-SELECT OBJECT_DEFINITION(OBJECT_ID('solturadb.sp_SecretBusinessLogic')) AS 'Código encriptado';
+EXEC storageprocedureenc;
+
+-- Esto deber�a devolver NULL si el SP est� encriptado
+SELECT OBJECT_DEFINITION(OBJECT_ID('storageprocedureenc'));
+
+-- Esto deber�a lanzar un error
+EXEC sp_helptext 'storageprocedureenc';
