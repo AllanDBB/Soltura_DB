@@ -72,7 +72,8 @@ SELECT
         END
     ) AS price_category,
     bp.name AS most_popular_benefit,
-    rp.last_redemption_date
+    rp.last_redemption_date,
+    'PLAN-' + UPPER(LEFT(s.description, 3)) AS plan_code_short
 FROM solturadb.soltura_subscriptions s
 JOIN solturadb.soltura_planprices pp ON s.subscriptionid = pp.subscriptionid
 JOIN PlanesConUsuarios pc ON pp.planpricesid = pc.planpricesid
@@ -149,7 +150,8 @@ SELECT
         END
     ) AS price_category,
     bmp.name AS most_popular_benefit,
-    CONVERT(VARCHAR(10), MAX(ap.last_redemption_date), 120) AS last_redemption_date
+    CONVERT(VARCHAR(10), MAX(ap.last_redemption_date), 120) AS last_redemption_date,
+    'PLAN-' + UPPER(LEFT(s.description, 3)) AS plan_code_short
 FROM solturadb.soltura_subscriptions s
 JOIN AgregacionPlanes ap ON s.subscriptionid = ap.subscriptionid
 CROSS JOIN BeneficioMasPopular bmp
