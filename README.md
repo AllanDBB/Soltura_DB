@@ -1294,7 +1294,571 @@ SELECT @Resultado AS PasswordCorrecto;
 ```
 ---
 # Consultas Misceláneas
+## Crear una vista indexada con al menos 4 tablas (ej. usuarios, suscripciones, pagos, servicios). La vista debe ser dinámica, no una vista materializada con datos estáticos. Demuestre que si es dinámica.
+```sql
+--La vista indexada
+CREATE VIEW solturadb.vw_UserSubscriptionDetails
+WITH SCHEMABINDING
+AS
+SELECT 
+    u.userid,
+    u.firstname,
+    u.lastname,
+    pp.planpersonid,
+    s.subscriptionid,
+    s.description AS subscription_description,
+    ppr.amount AS subscription_price,
+    ppr.currencyid,
+    b.benefitsid,
+    b.name AS benefit_name,
+    b.description AS benefit_description,
+    b.availableuntil
+FROM 
+    solturadb.soltura_users u
+JOIN 
+    solturadb.soltura_planperson_users ppu ON u.userid = ppu.userid
+JOIN 
+    solturadb.soltura_planperson pp ON ppu.planpersonid = pp.planpersonid
+JOIN 
+    solturadb.soltura_planprices ppr ON pp.planpricesid = ppr.planpricesid
+JOIN 
+    solturadb.soltura_subscriptions s ON ppr.subscriptionid = s.subscriptionid
+JOIN 
+    solturadb.soltura_benefits b ON pp.planpersonid = b.planpersonid;
+GO
 
+
+CREATE UNIQUE CLUSTERED INDEX IX_vw_UserSubscriptionDetails
+ON solturadb.vw_UserSubscriptionDetails (userid, planpersonid, benefitsid);
+GO
+
+
+
+-- Para probar que es dinámica hacemos esta inserción
+
+INSERT INTO solturadb.soltura_benefits
+    (enabled, name, description, availableuntil, planpersonid, categorybenefitsid, contractDetailId, benefitTypeId, benefitSubTypeId)
+VALUES
+    (0x01, 'Nuevo Beneficio', 'Descripción del nuevo beneficio', '2026-12-31', 1, 1, 1, 1, 1);
+GO
+
+-- Consultar la vista para verificar que el nuevo beneficio aparece
+SELECT *
+FROM solturadb.vw_UserSubscriptionDetails
+WHERE planpersonid = 1;
+GO
+```
+
+## Crear un procedimiento almacenado transaccional que realice una operación del sistema, relacionado a subscripciones, pagos, servicios, transacciones o planes, y que dicha operación requiera insertar y/o actualizar al menos 3 tablas.
+
+```sql
+
+-- Procedimiento
+CREATE PROCEDURE solturadb.sp_RegistrarNuevoPlan
+    @SubscriptionDescription NVARCHAR(255),
+    @LogoUrl NVARCHAR(255),
+    @Amount DECIMAL(10, 2),
+    @CurrencyId INT,
+    @RecurrencyType SMALLINT, 
+    @UserId INT,
+    @MaxAccounts INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    BEGIN TRY
+        
+        BEGIN TRANSACTION;
+
+        -- 1. Tabla 1
+        DECLARE @SubscriptionId INT;
+        INSERT INTO solturadb.soltura_subscriptions ([description], [logourl])
+        VALUES (@SubscriptionDescription, @LogoUrl);
+        SET @SubscriptionId = SCOPE_IDENTITY();
+
+        -- 2. Tabla 2
+        DECLARE @PlanPriceId INT;
+        INSERT INTO solturadb.soltura_planprices (amount, recurrencytype, posttime, endate, [current], currencyid, subscriptionid)
+        VALUES (@Amount, @RecurrencyType, GETDATE(), '2026-01-01', 0x01, @CurrencyId, @SubscriptionId);
+        SET @PlanPriceId = SCOPE_IDENTITY();
+
+        -- 3. Tabla 3
+        INSERT INTO solturadb.soltura_planperson (acquisition, enabled, scheduleid, planpricesid, expirationdate, maxaccounts)
+        VALUES (GETDATE(), 0x01, 1, @PlanPriceId, DATEADD(YEAR, 1, GETDATE()), @MaxAccounts);
+
+     
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        -- Revertir la transacción en caso de error
+        ROLLBACK TRANSACTION;
+
+        THROW;
+    END CATCH
+END;
+GO
+
+
+
+
+-- Prueba
+EXEC solturadb.sp_RegistrarNuevoPlan
+    @SubscriptionDescription = 'Plan Familiar',
+    @LogoUrl = 'https://soltura.com/images/plans/plan-familiar.png',
+    @Amount = 49.99,
+    @CurrencyId = 1, 
+    @RecurrencyType = 1,
+    @UserId = 1,
+    @MaxAccounts = 5;
+
+SELECT * FROM solturadb.soltura_planperson WHERE planpricesid = (SELECT planpricesid FROM solturadb.soltura_planprices WHERE subscriptionid = (SELECT subscriptionid FROM solturadb.soltura_subscriptions WHERE [description] = 'Plan Familiar'));
+
+```
+
+## Escribir un SELECT que use CASE para crear una columna calculada que agrupe dinámicamente datos (por ejemplo, agrupar cantidades de usuarios por plan en rangos de monto, no use este ejemplo).
+
+```sql
+
+-- Agrupa según el tipo de plan, cuántos hay de cada uno y su tipo (individuales, grupo pequeño o grande)
+SELECT 
+    s.description AS [Plan],
+    COUNT(DISTINCT pp.planpersonid) AS TotalPlanes,
+    CASE 
+        WHEN pp.maxaccounts = 1 THEN 'Individual'
+        WHEN pp.maxaccounts BETWEEN 2 AND 4 THEN 'Grupo pequeño'
+        WHEN pp.maxaccounts > 4 THEN 'Grupo grande'
+        ELSE 'Sin Clasificar'
+    END AS TipoPlan
+FROM 
+    solturadb.soltura_planperson pp
+JOIN 
+    solturadb.soltura_planprices ppr ON pp.planpricesid = ppr.planpricesid
+JOIN 
+    solturadb.soltura_subscriptions s ON ppr.subscriptionid = s.subscriptionid
+GROUP BY 
+    s.description,
+    CASE 
+        WHEN pp.maxaccounts = 1 THEN 'Individual'
+        WHEN pp.maxaccounts BETWEEN 2 AND 4 THEN 'Grupo pequeño'
+        WHEN pp.maxaccounts > 4 THEN 'Grupo grande'
+        ELSE 'Sin Clasificar'
+    END
+ORDER BY 
+    TipoPlan, [Plan];
+```
+
+## Imagine una cosulta que el sistema va a necesitar para mostrar cierta información, o reporte o pantalla, y que esa consulta vaya a requerir:
+## 4 JOINs entre tablas.
+## 2 funciones agregadas (ej. SUM, AVG).
+## 3 subconsultas or 3 CTEs
+## Un CASE, CONVERT, ORDER BY, HAVING, una función escalar, y operadores como IN, NOT IN, EXISTS.
+## Escriba dicha consulta y ejecutela con el query analizer, utilizando el analizador de pesos y costos del plan de ejecución, reacomode la consulta para que sea más eficiente sin necesidad de agregar nuevos índices.
+
+```sql
+
+--OG
+
+WITH BeneficiosPopulares AS (
+   
+    SELECT 
+        b.benefitsid,
+        b.name,
+        COUNT(r.redemptionid) AS redemption_count
+    FROM solturadb.soltura_benefits b
+    JOIN solturadb.soltura_redemptions r ON b.benefitsid = r.benefitsid
+    WHERE EXISTS (
+        SELECT 1 FROM solturadb.soltura_planperson pp 
+        WHERE pp.planpersonid = b.planpersonid
+    )
+    GROUP BY b.benefitsid, b.name
+    HAVING COUNT(r.redemptionid) > 0
+),
+
+PlanesConUsuarios AS (
+   
+    SELECT 
+        pp.planpricesid,
+        COUNT(DISTINCT ppu.userid) AS user_count
+    FROM solturadb.soltura_planperson pp
+    JOIN solturadb.soltura_planperson_users ppu ON pp.planpersonid = ppu.planpersonid
+    WHERE pp.planpricesid NOT IN (
+        SELECT planpricesid 
+        FROM solturadb.soltura_planprices 
+        WHERE amount <= 0
+    )
+    GROUP BY pp.planpricesid
+),
+
+RedencionesPorPlan AS (
+   
+    SELECT 
+        pp.planpricesid,
+        COUNT(r.redemptionid) AS redemption_count,
+        CONVERT(VARCHAR(10), MAX(r.date), 120) AS last_redemption_date
+    FROM solturadb.soltura_redemptions r
+    JOIN solturadb.soltura_benefits b ON r.benefitsid = b.benefitsid
+    JOIN solturadb.soltura_planperson pp ON b.planpersonid = pp.planpersonid
+    GROUP BY pp.planpricesid
+)
+
+SELECT 
+    s.subscriptionid,
+    s.description AS plan_name,
+    
+    AVG(pp.amount) AS average_price,
+    SUM(CASE 
+        WHEN pc.user_count > 100 THEN 1 
+        ELSE 0 
+    END) AS popular_plans_count,
+    
+    CONVERT(VARCHAR(10), 
+        CASE 
+            WHEN AVG(pp.amount) < 20 THEN 'Económico'
+            WHEN AVG(pp.amount) BETWEEN 20 AND 50 THEN 'Estándar'
+            ELSE 'Premium'
+        END
+    ) AS price_category,
+    bp.name AS most_popular_benefit,
+    rp.last_redemption_date
+FROM solturadb.soltura_subscriptions s
+JOIN solturadb.soltura_planprices pp ON s.subscriptionid = pp.subscriptionid
+JOIN PlanesConUsuarios pc ON pp.planpricesid = pc.planpricesid
+LEFT JOIN RedencionesPorPlan rp ON pp.planpricesid = rp.planpricesid
+LEFT JOIN (
+    SELECT TOP 1 b.* 
+    FROM BeneficiosPopulares b
+    ORDER BY b.redemption_count DESC
+) bp ON 1=1 
+WHERE pc.user_count > 0
+GROUP BY 
+    s.subscriptionid,
+    s.description,
+    bp.name,
+    rp.last_redemption_date,
+    pc.user_count
+HAVING AVG(pp.amount) > 0 
+ORDER BY 
+    price_category DESC,
+    average_price DESC;
+
+
+
+-- OPTIMIZADA
+WITH PlanesValidos AS (
+    SELECT 
+        planpricesid,
+        subscriptionid,
+        amount
+    FROM solturadb.soltura_planprices
+    WHERE amount > 0
+),
+
+BeneficioMasPopular AS (
+    SELECT TOP 1
+        b.benefitsid,
+        b.name,
+        b.planpersonid,
+        COUNT(r.redemptionid) AS redemption_count
+    FROM solturadb.soltura_benefits b
+    JOIN solturadb.soltura_redemptions r ON b.benefitsid = r.benefitsid
+    JOIN solturadb.soltura_planperson pp ON b.planpersonid = pp.planpersonid
+    GROUP BY b.benefitsid, b.name, b.planpersonid
+    ORDER BY COUNT(r.redemptionid) DESC
+),
+
+AgregacionPlanes AS (
+    SELECT
+        pv.planpricesid,
+        pv.subscriptionid,
+        pv.amount,
+        COUNT(DISTINCT ppu.userid) AS user_count,
+        COUNT(DISTINCT r.redemptionid) AS redemption_count,
+        MAX(r.date) AS last_redemption_date
+    FROM PlanesValidos pv
+    JOIN solturadb.soltura_planperson pp ON pv.planpricesid = pp.planpricesid
+    LEFT JOIN solturadb.soltura_planperson_users ppu ON pp.planpersonid = ppu.planpersonid
+    LEFT JOIN solturadb.soltura_benefits b ON pp.planpersonid = b.planpersonid
+    LEFT JOIN solturadb.soltura_redemptions r ON b.benefitsid = r.benefitsid
+    GROUP BY pv.planpricesid, pv.subscriptionid, pv.amount
+    HAVING COUNT(DISTINCT ppu.userid) > 0
+)
+
+SELECT 
+    s.subscriptionid,
+    s.description AS plan_name,
+    AVG(ap.amount) AS average_price,
+    SUM(CASE WHEN ap.user_count > 100 THEN 1 ELSE 0 END) AS popular_plans_count,
+    CONVERT(VARCHAR(10), 
+        CASE 
+            WHEN AVG(ap.amount) < 20 THEN 'Económico'
+            WHEN AVG(ap.amount) BETWEEN 20 AND 50 THEN 'Estándar'
+            ELSE 'Premium'
+        END
+    ) AS price_category,
+    bmp.name AS most_popular_benefit,
+    CONVERT(VARCHAR(10), MAX(ap.last_redemption_date), 120) AS last_redemption_date
+FROM solturadb.soltura_subscriptions s
+JOIN AgregacionPlanes ap ON s.subscriptionid = ap.subscriptionid
+CROSS JOIN BeneficioMasPopular bmp
+GROUP BY 
+    s.subscriptionid,
+    s.description,
+    bmp.name,
+    ap.user_count
+ORDER BY 
+    price_category DESC,
+    average_price DESC;
+
+
+-- Excecution plan en los botones superiores de la toolbar y ver stats específicas con el profiler :p
+```
+
+
+## Crear una consulta con al menos 3 JOINs que analice información donde podría ser importante obtener un SET DIFFERENCE y un INTERSECTION
+
+```sql
+WITH UsuariosConPlanes AS (
+    SELECT DISTINCT u.userid
+    FROM solturadb.soltura_users u
+    JOIN solturadb.soltura_planperson_users ppu ON u.userid = ppu.userid
+    JOIN solturadb.soltura_planperson pp ON ppu.planpersonid = pp.planpersonid
+    JOIN solturadb.soltura_planprices ppr ON pp.planpricesid = ppr.planpricesid
+),
+
+
+UsuariosConRedenciones AS (
+    SELECT DISTINCT u.userid
+    FROM solturadb.soltura_users u
+    JOIN solturadb.soltura_redemptions r ON u.userid = r.userid
+    JOIN solturadb.soltura_benefits b ON r.benefitsid = b.benefitsid
+    JOIN solturadb.soltura_planperson pp ON b.planpersonid = pp.planpersonid
+),
+
+-- Intersección: Usuarios con planes Y redenciones, acá usamos el INTERSECT
+Interseccion AS (
+    SELECT userid FROM UsuariosConPlanes
+    INTERSECT
+    SELECT userid FROM UsuariosConRedenciones
+),
+
+-- Para las diferencias note que en SQL no se usa SET DIFFERENCE, sino EXCEPT pero cumple el mismo propósito
+
+-- Diferencia 1: Usuarios con planes PERO SIN redenciones
+PlanesSinRedenciones AS (
+    SELECT userid FROM UsuariosConPlanes
+    EXCEPT
+    SELECT userid FROM UsuariosConRedenciones
+),
+
+-- Diferencia 2: Usuarios con redenciones PERO SIN planes 
+RedencionesSinPlanes AS (
+    SELECT userid FROM UsuariosConRedenciones
+    EXCEPT
+    SELECT userid FROM UsuariosConPlanes
+)
+
+-- Agrupamos para que la consulta se vea más linda
+SELECT 
+    'INTERSECTION: Usuarios con planes Y redenciones' AS categoria,
+    COUNT(*) AS total_usuarios,
+    STRING_AGG(CAST(userid AS VARCHAR), ', ') AS lista_userids
+FROM Interseccion
+
+UNION ALL
+
+SELECT 
+    'SET DIFFERENCE: Usuarios con planes PERO SIN redenciones' AS categoria,
+    COUNT(*) AS total_usuarios,
+    STRING_AGG(CAST(userid AS VARCHAR), ', ') AS lista_userids
+FROM PlanesSinRedenciones
+
+UNION ALL
+
+SELECT 
+    'SET DIFFERENCE: Usuarios con redenciones PERO SIN planes' AS categoria,
+    COUNT(*) AS total_usuarios,
+    STRING_AGG(CAST(userid AS VARCHAR), ', ') AS lista_userids
+FROM RedencionesSinPlanes;
+```
+
+## Crear un procedimiento almacenado transaccional que llame a otro SP transaccional, el cual a su vez llame a otro SP transaccional. Cada uno debe modificar al menos 2 tablas. Se debe demostrar que es posible hacer COMMIT y ROLLBACK con ejemplos exitosos y fallidos sin que haya interrumpción de la ejecución correcta de ninguno de los SP en ninguno de los niveles del llamado.
+```sql
+USE soltura;
+GO
+CREATE PROCEDURE [solturadb].[SP_DesactivarSchedules]
+    @CategoryId INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DECLARE @ErrorNumber INT, @ErrorSeverity INT, @ErrorState INT;
+    DECLARE @InicieTransaccion BIT = 0;
+
+    IF @@TRANCOUNT = 0 BEGIN
+        SET @InicieTransaccion = 1;
+        BEGIN TRANSACTION;
+    END;
+
+    BEGIN TRY
+      
+        UPDATE solturadb.soltura_schedules
+        SET enddate = GETDATE() -- Finalizar el schedule al poner la enddate en el presente
+        WHERE scheduleid IN (
+            SELECT DISTINCT scheduleid
+            FROM solturadb.soltura_planperson
+            WHERE planpersonid IN (
+                SELECT DISTINCT planpersonid
+                FROM solturadb.soltura_benefits
+                WHERE categorybenefitsid = @CategoryId
+            )
+        );
+
+        IF @InicieTransaccion = 1 BEGIN
+            COMMIT;
+        END;
+    END TRY
+    BEGIN CATCH
+        IF @InicieTransaccion = 1 BEGIN
+            ROLLBACK;
+        END;
+
+        THROW;
+    END CATCH;
+END;
+GO
+
+CREATE PROCEDURE [solturadb].[SP_DesactivarSuscripcionesYPlanes]
+    @CategoryId INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DECLARE @ErrorNumber INT, @ErrorSeverity INT, @ErrorState INT;
+    DECLARE @InicieTransaccion BIT = 0;
+
+    IF @@TRANCOUNT = 0 BEGIN
+        SET @InicieTransaccion = 1;
+        BEGIN TRANSACTION;
+    END;
+
+    BEGIN TRY
+        -- Desactivar los planes asociados a los beneficios de la categoría
+        UPDATE solturadb.soltura_planperson
+        SET enabled = 0x00
+        WHERE planpersonid IN (
+            SELECT DISTINCT planpersonid
+            FROM solturadb.soltura_benefits
+            WHERE categorybenefitsid = @CategoryId
+        );
+
+        -- Desactivar las suscripciones asociadas a los planes
+        UPDATE solturadb.soltura_subscriptions
+        SET [description] = CONCAT([description], ' - Desactivada')
+        WHERE subscriptionid IN (
+            SELECT DISTINCT ppr.subscriptionid
+            FROM solturadb.soltura_planprices ppr
+            JOIN solturadb.soltura_planperson pp ON ppr.planpricesid = pp.planpricesid
+            WHERE pp.planpersonid IN (
+                SELECT DISTINCT planpersonid
+                FROM solturadb.soltura_benefits
+                WHERE categorybenefitsid = @CategoryId
+            )
+        );
+
+       
+        EXEC [solturadb].[SP_DesactivarSchedules] @CategoryId;
+
+        IF @InicieTransaccion = 1 BEGIN
+            COMMIT;
+        END;
+    END TRY
+    BEGIN CATCH
+        IF @InicieTransaccion = 1 BEGIN
+            ROLLBACK;
+        END;
+
+        THROW;
+    END CATCH;
+END;
+GO
+CREATE PROCEDURE [solturadb].[SP_DesactivarCategoria]
+    @CategoryId INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DECLARE @ErrorNumber INT, @ErrorSeverity INT, @ErrorState INT;
+    DECLARE @InicieTransaccion BIT = 0;
+
+    IF @@TRANCOUNT = 0 BEGIN
+        SET @InicieTransaccion = 1;
+        BEGIN TRANSACTION;
+    END;
+
+    BEGIN TRY
+        -- Desactivar la categoría
+        UPDATE solturadb.soltura_categorybenefits
+        SET enabled = 0x00
+        WHERE categorybenefitsid = @CategoryId;
+
+        -- Desactivar los beneficios asociados a la categoría
+        UPDATE solturadb.soltura_benefits
+        SET enabled = 0x00
+        WHERE categorybenefitsid = @CategoryId;
+
+        -- Llamar al procedimiento para desactivar schedules
+        EXEC [solturadb].[SP_DesactivarSchedules] @CategoryId;
+
+        IF @InicieTransaccion = 1 BEGIN
+            COMMIT;
+        END;
+    END TRY
+    BEGIN CATCH
+        IF @InicieTransaccion = 1 BEGIN
+            ROLLBACK;
+        END;
+
+        THROW;
+    END CATCH;
+END;
+GO
+
+
+--PRUEBAS
+
+
+-- exitosa
+SELECT 
+    cb.categorybenefitsid AS CategoriaID,
+    cb.name AS Categoria,
+    cb.enabled AS CategoriaHabilitada,
+    b.benefitsid AS BeneficioID,
+    b.name AS Beneficio,
+    b.enabled AS BeneficioHabilitado,
+    pp.planpersonid AS PlanPersonID,
+    pp.enabled AS PlanHabilitado,
+    s.subscriptionid AS SuscripcionID,
+    s.description AS Suscripcion,
+    sch.scheduleid AS ScheduleID,
+    sch.enddate AS ScheduleEndDate
+FROM solturadb.soltura_categorybenefits cb
+LEFT JOIN solturadb.soltura_benefits b ON cb.categorybenefitsid = b.categorybenefitsid
+LEFT JOIN solturadb.soltura_planperson pp ON b.planpersonid = pp.planpersonid
+LEFT JOIN solturadb.soltura_planprices ppr ON pp.planpricesid = ppr.planpricesid
+LEFT JOIN solturadb.soltura_subscriptions s ON ppr.subscriptionid = s.subscriptionid
+LEFT JOIN solturadb.soltura_schedules sch ON pp.scheduleid = sch.scheduleid
+WHERE cb.categorybenefitsid = 999 --CAMBIAR ID DEPENDIENDO DE LA PRUEBA!!!
+ORDER BY cb.categorybenefitsid, b.benefitsid, pp.planpersonid, s.subscriptionid, sch.scheduleid;
+
+EXEC [solturadb].[SP_DesactivarCategoria] @CategoryId = 2; -- ID de prueba
+
+-- correr de nuevo el select para ver que ahora todo está deshabilitado
+
+
+-- fallido
+EXEC [solturadb].[SP_DesactivarCategoria] @CategoryId = 999; -- ID inexistente
+-- correr el select con 999 y ver que no da nada, pero no hay errores por el rollback y try/catch
+```
 ## Consulta sobre obtener un JSON
 Si es posible generar un JSON mediante una consulta SQL entonces, digamos por ejemplo, la pantalla de “Dashboard del Usuario” podría requerir esta consulta para mostrar de forma estructurada los planes activos del usuario, sus beneficios asociados, el historial de redenciones recientes y la información de precios y proveedores.
 ```sql
