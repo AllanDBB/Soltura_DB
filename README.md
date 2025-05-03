@@ -1447,12 +1447,7 @@ ORDER BY
     TipoPlan, [Plan];
 ```
 
-## Imagine una cosulta que el sistema va a necesitar para mostrar cierta información, o reporte o pantalla, y que esa consulta vaya a requerir:
-## 4 JOINs entre tablas.
-## 2 funciones agregadas (ej. SUM, AVG).
-## 3 subconsultas or 3 CTEs
-## Un CASE, CONVERT, ORDER BY, HAVING, una función escalar, y operadores como IN, NOT IN, EXISTS.
-## Escriba dicha consulta y ejecutela con el query analizer, utilizando el analizador de pesos y costos del plan de ejecución, reacomode la consulta para que sea más eficiente sin necesidad de agregar nuevos índices.
+## Imagine una cosulta que el sistema va a necesitar para mostrar cierta información, o reporte o pantalla, y que esa consulta vaya a requerir: 4 JOINs entre tablas, 2 funciones agregadas (ej. SUM, AVG), 3 subconsultas or 3 CTEs, Un CASE, CONVERT, ORDER BY, HAVING, una función escalar, y operadores como IN, NOT IN, EXISTS. Escriba dicha consulta y ejecutela con el query analizer, utilizando el analizador de pesos y costos del plan de ejecución, reacomode la consulta para que sea más eficiente sin necesidad de agregar nuevos índices.
 
 ```sql
 
