@@ -877,6 +877,11 @@ SELECT
 FROM solturadb.vw_CompanyContactInfo
 GROUP BY CompanyName
 ORDER BY CompanyName;
+
+
+-- Probar que el schema binding funciona:
+ALTER TABLE solturadb.soltura_companyinfotypes
+ALTER COLUMN name VARCHAR(150);
 ```
 ## 6 AVG
 Con el AVG estamos agrupando para sacar un promedio de montos pagados.

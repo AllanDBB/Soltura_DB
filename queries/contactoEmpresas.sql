@@ -48,3 +48,8 @@ SELECT
 FROM solturadb.vw_CompanyContactInfo
 GROUP BY CompanyName
 ORDER BY CompanyName;
+
+
+-- Probar que el schema binding funciona:
+ALTER TABLE solturadb.soltura_companyinfotypes
+ALTER COLUMN name VARCHAR(150);
