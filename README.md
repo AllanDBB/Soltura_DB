@@ -33,7 +33,7 @@
     - [Ahora para cifrar con la llave:](#ahora-para-cifrar-con-la-llave)
     - [Para descrifrar usando las llaves:](#para-descrifrar-usando-las-llaves)
 - [Consultas Misceláneas](#consultas-misceláneas)
-  - [Vista indexada dinámica](#vista-indexada-dinámica)
+  - [Vista indexada dínamica](#vista-indexada-dínamica)
   - [Procedimiento almacenado transaccional](#procedimiento-almacenado-transaccional)
   - [Consulta con CASE para agrupamiento](#consulta-con-case-para-agrupamiento)
   - [Consulta compleja optimizada](#consulta-compleja-optimizada)
@@ -42,6 +42,7 @@
   - [Consulta sobre obtener un JSON](#consulta-sobre-obtener-un-json)
   - [SP transaccional que Actualice los contratos](#sp-transaccional-que-actualice-los-contratos)
   - [Consulta y exportar a CSV.](#consulta-y-exportar-a-csv)
+  - [Bitácora en otro SQL Server.](#bitácora-en-otro-sql-server)
 - [Concurrencia](#concurrencia)
 - [Soltura ft. PaymentAssistant](#soltura-ft-paymentassistant)
 
@@ -2124,8 +2125,197 @@ Y finalmente nos sale que es de tipo .csv
 ![alt text](assets/consultas_miscelaneas/saveName.png)
 
 
+## Bitácora en otro SQL Server.
+
+Por supuesto, di hay que crear otro servidor, entonces, por docker:
+```powershell
+docker run -e "ACCEPT_EULA=Y" -e "SA_PASSWORD=Soltura12345" -p 1434:1433 --name sql_bitacora -d mcr.microsoft.com/mssql/server:2019-latest 
+```
+Una vez instanciado el nuevo servidor.
+
+En ese servidor, creo entonces la tabla de Bitacora
+```sql
+CREATE DATABASE BitacoraDB;
+GO
+
+USE BitacoraDB;
+GO
+
+CREATE TABLE dbo.BitacoraEventos (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    nombre_sp NVARCHAR(100),
+    mensaje NVARCHAR(MAX),
+    fecha DATETIME DEFAULT GETDATE()
+);
+GO
+```
+
+Una vez creado, utilizamos el LinkedServer para poder vincular los servidores de SQL. La idea es que, si se ejecuta se siga tal y como se ha puesto, sería solo ejecutar.
+Aunque, si por a o b anteriormente, tuvieron que usar un puerto distinto, cambiarlo en el @datasrc, al igual que el @provider para T-SQL por default es SQLNCLI.
+```sql
+EXEC sp_addlinkedserver 
+    @server = 'LinkedBitacora', 
+    @srvproduct = '',
+    @provider = 'SQLNCLI', 
+    @datasrc = 'localhost,1434';
+
+-- Configura login para conectarse al servidor remoto
+EXEC sp_addlinkedsrvlogin 
+    @rmtsrvname = 'LinkedBitacora',
+    @useself = 'false',
+    @locallogin = NULL,
+    @rmtuser = 'sa',
+    @rmtpassword = 'Soltura12345';
+
+
+SELECT * FROM OPENQUERY(LinkedBitacora, 'SELECT name FROM sys.databases');
+```
+
+Ahora, como la pregunta dice, vamos a hacer el SP genérico, así cualquier otro puede usarlo y dejar log.
+```sql
+CREATE PROCEDURE solturadb.sp_RegistrarBitacoraLinked
+    @NombreSP NVARCHAR(128),
+    @Mensaje NVARCHAR(MAX),
+    @Severity INT = 1
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    BEGIN TRY
+        INSERT INTO LinkedBitacora.BitacoraDB.dbo.BitacoraEventos (nombre_sp, mensaje, fecha)
+        VALUES (@NombreSP, @Mensaje, SYSDATETIME());
+    END TRY
+    BEGIN CATCH
+    END CATCH
+END;
+```
+------
+Es importante. La conexión entre los servidores puede no ocurrir por el error de DTC, me sucedió a mí, para solucionarlo:
+1. Verificación del Servicio Distributed Transaction Coordinator (DTC)
+Acceder al Panel de Servicios:
+
+Presione Windows + R para abrir el cuadro de diálogo "Ejecutar".
+Escriba services.msc y presione Enter.
+Buscar el Servicio DTC:
+
+En la lista de servicios, busque "Distributed Transaction Coordinator".
+Asegúrese de que el estado del servicio sea "Running". Si no está en ejecución, haga clic derecho sobre el servicio y seleccione "Iniciar".
+
+2. Configuración de DTC
+Abrir Component Services:
+
+Busque "Component Services" en el menú de inicio y ábralo.
+Navegar a la Configuración de DTC:
+
+En el panel de navegación, expanda Component Services -> Computers -> My Computer -> Distributed Transaction Coordinator.
+Modificar Propiedades de Local DTC:
+
+Haga clic derecho en "Local DTC" y seleccione "Properties".
+Configurar la Pestaña de Seguridad:
+
+En la pestaña "Security", asegúrese de que las siguientes opciones estén habilitadas:
+Network DTC Access: Habilitar el acceso a DTC a través de la red.
+Allow Remote Clients: Permitir que los clientes remotos accedan al DTC.
+Allow Inbound: Permitir conexiones entrantes.
+Allow Outbound: Permitir conexiones salientes.
+Asegúrese de que la opción No Authentication Required esté seleccionada, o que la opción de autenticación sea compatible con su configuración de seguridad.
+Aplicar Cambios:
+
+Haga clic en "OK" para aplicar los cambios realizados en la configuración de DTC.
+
+------
+
+Ahora sí
+
+Entonces, ahora para probarlo, usaremos, el SP que habíamos creado en CM_SPTransaccional con unos ligeros cambios.
+```sql
+IF OBJECT_ID('solturadb.sp_RegistrarNuevoPlan', 'P') IS NOT NULL
+    DROP PROCEDURE solturadb.sp_RegistrarNuevoPlan;
+GO
+
+CREATE PROCEDURE solturadb.sp_RegistrarNuevoPlan
+    @SubscriptionDescription NVARCHAR(255),
+    @LogoUrl NVARCHAR(255),
+    @Amount DECIMAL(10, 2),
+    @CurrencyId INT,
+    @RecurrencyType SMALLINT, 
+    @UserId INT,
+    @MaxAccounts INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    BEGIN TRY
+        BEGIN TRANSACTION;
+
+        -- 1. Insertar en Subscriptions
+        DECLARE @SubscriptionId INT;
+        INSERT INTO solturadb.soltura_subscriptions ([description], [logourl])
+        VALUES (@SubscriptionDescription, @LogoUrl);
+        SET @SubscriptionId = SCOPE_IDENTITY();
+
+        -- 2. Insertar en PlanPrices
+        DECLARE @PlanPriceId INT;
+        INSERT INTO solturadb.soltura_planprices (amount, recurrencytype, posttime, endate, [current], currencyid, subscriptionid)
+        VALUES (@Amount, @RecurrencyType, GETDATE(), '2026-01-01', 0x01, @CurrencyId, @SubscriptionId);
+        SET @PlanPriceId = SCOPE_IDENTITY();
+
+        -- 3. Insertar en PlanPerson
+        INSERT INTO solturadb.soltura_planperson (acquisition, enabled, scheduleid, planpricesid, expirationdate, maxaccounts)
+        VALUES (GETDATE(), 0x01, 1, @PlanPriceId, DATEADD(YEAR, 1, GETDATE()), @MaxAccounts);
+
+        COMMIT TRANSACTION;
+
+        -- Registro exitoso en la bitácora
+        DECLARE @SuccessMessage NVARCHAR(MAX);
+        SET @SuccessMessage = N'Registro exitoso de nuevo plan: ' + @SubscriptionDescription; 
+
+        EXEC solturadb.sp_RegistrarBitacoraLinked  --- Desde aquí entonces llamamos el SP para dejar log.
+            @NombreSP = 'sp_RegistrarNuevoPlan', 
+            @Mensaje = @SuccessMessage, 
+            @Severity = 0; -- 0 para indicar éxito
+
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 
+            ROLLBACK TRANSACTION;
+
+        DECLARE @ErrorMessage NVARCHAR(MAX) = ERROR_MESSAGE();
+        DECLARE @ErrorSeverity INT = ERROR_SEVERITY();
+        DECLARE @ErrorState INT = ERROR_STATE();
+
+        EXEC solturadb.sp_RegistrarBitacoraLinked 
+            @NombreSP = 'sp_RegistrarNuevoPlan', 
+            @Mensaje = @ErrorMessage, 
+            @Severity = @ErrorSeverity;
+
+        THROW @ErrorSeverity, @ErrorMessage, @ErrorState;
+    END CATCH
+END;
+GO
+```
+Ejecutamos una prueba (la misma del archivo CM_SPTransaccional.sql)
+```sql
+-- Prueba
+EXEC solturadb.sp_RegistrarNuevoPlan
+    @SubscriptionDescription = 'Plan Familiar',
+    @LogoUrl = 'https://soltura.com/images/plans/plan-familiar.png',
+    @Amount = 49.99,
+    @CurrencyId = 1, 
+    @RecurrencyType = 1,
+    @UserId = 1,
+    @MaxAccounts = 5;
+```
+
+Y desde la otra base de datos obtenemos:
+![alt text](assets/consultas_miscelaneas/linked.png)
+
+Y como se observa se creo el log :)
 
 ---
+
+
+
 # Concurrencia
 
 ---
