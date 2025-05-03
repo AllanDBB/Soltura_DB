@@ -22,6 +22,17 @@
   - [9 EXECUTE AS y DISTINCT](#9-execute-as-y-distinct)
   - [10 UNION](#10-union)
 - [Mantenimiento de la Seguridad](#mantenimiento-de-la-seguridad)
+  - [Usuario sin acceso del todo.](#usuario-sin-acceso-del-todo)
+  - [Usuario sin acceso al select.](#usuario-sin-acceso-al-select)
+  - [Rol usuario con acceso a SP, pero nada más](#rol-usuario-con-acceso-a-sp-pero-nada-más)
+  - [Ahora, RLS](#ahora-rls)
+  - [Ahora con el certificado, llave simétrica, asimétrica y cifrados](#ahora-con-el-certificado-llave-simétrica-asimétrica-y-cifrados)
+    - [Creada la master key, se puede crear el certificado:](#creada-la-master-key-se-puede-crear-el-certificado)
+    - [Crear llave asimétrica:](#crear-llave-asimétrica)
+    - [Crear llave simétrica:](#crear-llave-simétrica)
+    - [Ahora para cifrar con la llave:](#ahora-para-cifrar-con-la-llave)
+    - [Para descrifrar usando las llaves:](#para-descrifrar-usando-las-llaves)
+  - [SELECT @Resultado AS PasswordCorrecto;](#select-resultado-as-passwordcorrecto)
 - [Consultas Misceláneas](#consultas-misceláneas)
 - [Concurrencia](#concurrencia)
 - [Soltura ft. PaymentAssistant](#soltura-ft-paymentassistant)
@@ -742,7 +753,7 @@ Y luego sería programar un mantenimiento para ejecutarse automáticamente:
 #### 5. Finalmente se verá así:
 ![alt text](assets/image-4.png)
 
-IMPORTANTE: SI nota algún error a la hora de correr el SQL agent, revise scripts/fixAgentSQL.sql.
+IMPORTANTE: Puede suceder que, sí no se había activado el SQL Agent, pueda tener problemas con los permisos, así que se adjunta un script en: "scripts/fixAgentSQL.sql" que al correrlo otorga los permisos necesarios.
 ```sql
 USE soltura;
 GO
@@ -999,8 +1010,280 @@ EXEC solturadb.sp_SimpleAudit @days = 30;
 
 # Mantenimiento de la Seguridad
 
+## Usuario sin acceso del todo.
+Para poder crear un usuario en la base de datos que **NO** tenga acceso, creamos un user asociado a un login de la siguiente forma:
 
---- 
+![Create](assets/security_images/create-userNoacces.png)
+
+Posteriormente nos vemos a 'status' y removemos el permiso de acceso.
+
+![Create](assets/security_images/denyAccess-User.png)
+
+Si se desea que del todo **NO** se pueda conectar, le quitamos el permiso al inicio de sesión.
+
+![Create](assets/security_images/denyLogin.png)
+
+## Usuario sin acceso al select.
+Para empezar vamos a crear los usuarios:
+
+```sql
+-- Crear usuario con permisos para select 
+CREATE LOGIN selectPermsLogin WITH PASSWORD = '123456';
+CREATE USER selectPermsUser FOR LOGIN selectPermsLogin;
+
+-- Crear usuario SIN select, este mae se mete a mi base de datos y lo demando -.- 
+CREATE LOGIN noSelectPermsLogin WITH PASSWORD = '123456';
+CREATE USER noSelectPermsUser FOR LOGIN noSelectPermsLogin;
+```
+
+Ahora creamos los roles y asignamos a los usuarios:
+```sql
+-- Rol con permiso de SELECT
+CREATE ROLE rolSelect;
+
+-- Rol sin permisos explícitos
+CREATE ROLE rolNoSelect;
+
+-- Asignar usuarios a roles
+EXEC sp_addrolemember 'rolSelect', 'selectPermsUser';
+EXEC sp_addrolemember 'rolNoSelect', 'noSelectPermsUser';
+GO
+```
+
+Y aquí es dónde decidimos los permisos que un usuario puede tener, en este caso le doy select al de rolSelect en users.
+```sql
+GRANT SELECT ON solturadb.soltura_users TO rolSelect;
+```
+
+Si nosotros iniciamos con "noSelectPermsLogin" e intenteamos hacer el select, pasará lo siguiente:
+
+![alt text](assets/security_images/noselecterror.png)
+
+Por el contrario si iniciamos con el usuario que si tiene los permisos, y queremos corroborar las tablas, solo tiene acceso a user:
+
+![alt text](assets/security_images/soloUsers.png)
+
+Y si ejecutamos el select podremos ver que funciona correctamente:
+
+![alt text](assets/security_images/workSelect.png)
+
+## Rol usuario con acceso a SP, pero nada más
+Entonces, si se desea que el usuario pueda usar un SP para ver una tabla, pero no darle accesos directos se puede hacer :D
+
+Para no crear otro usuario, voy a usar el mismo que creamos antes de "noSelectPermsUser", este no tiene permisos de nada.
+
+Y voy a crear un SP simple para ver la tabla de usuarios.
+```sql
+CREATE PROCEDURE sp_consultarUsers
+WITH EXECUTE AS OWNER
+AS
+BEGIN
+    SELECT * FROM solturadb.soltura_users;
+END;
+GO
+```
+
+Y ahora, al usuario, le vamos a dar permisos de usar el SP.
+```sql
+GRANT EXECUTE ON sp_consultarUsers TO noSelectPermsUser;
+```
+
+Entonces, si lo probamos, vamos a ver que ni si quiera reconoce la tabla que puse arriba para el select, pero si puedo ejecutar el SP.
+
+![alt text](assets/security_images/spPerms.png)
+
+
+## Ahora, RLS
+Si se quiere implementar un Row Level Security, entonces:
+Hago el ejemplo para que un usuario SOLO pueda tener sus datos de suscripcción.
+
+- Primero se necesita crear la función "predicado", la cuál me permite escoger que filas accesa y cuáles no
+```sql
+CREATE OR ALTER FUNCTION [solturadb].[SecurityPredicatePlanperson](@UserId INT)
+RETURNS TABLE
+WITH SCHEMABINDING
+AS
+RETURN
+    SELECT 1 AS result
+    WHERE @UserId = CAST(SESSION_CONTEXT(N'UserId') AS INT);
+GO
+```
+
+- Acá, se crea entonces la función predicado, lo que involucra crear ahora la política que nos permite el acecso
+
+```sql
+CREATE SECURITY POLICY [solturadb].[PlanpersonFilter]
+ADD FILTER PREDICATE [solturadb].[SecurityPredicatePlanperson]([userid]) -- Filtra por el predicado que pusimos
+ON [solturadb].[soltura_planperson_users]
+WITH (STATE = ON);
+GO
+```
+- Y por último se crea el contexto, que es lo que nos permite por medio de un SP, ejecutarlo 
+  
+```sql
+CREATE OR ALTER PROCEDURE [solturadb].[SetUserContext]
+    @UserId INT
+AS
+BEGIN
+    EXEC sp_set_session_context @key = N'UserId', @value = @UserId;
+END;
+GO
+```
+
+Entonces, ya si se desea usar, en este caso, que puse el userId para no crear usuarios para probar un ejemplo:
+```sql
+EXEC [solturadb].[SetUserContext] @UserId = 1; -- Ponemos el contexto para el userId 1.
+
+-- Se puede cambiar el userId para probar con otros usuarios.
+
+-- Ahora, si el usuario 1 ejecuta un select a la tabla, solo verá sus datos.
+SELECT pu.planpersonid, pu.userid, pp.acquisition, pp.enabled, s.description AS 'Plan'
+FROM [solturadb].[soltura_planperson_users] pu
+JOIN [solturadb].[soltura_planperson] pp ON pu.planpersonid = pp.planpersonid
+JOIN [solturadb].[soltura_planprices] ppr ON pp.planpricesid = ppr.planpricesid
+JOIN [solturadb].[soltura_subscriptions] s ON ppr.subscriptionid = s.subscriptionid;
+```
+
+Y lo vemos así:
+
+![alt text](assets/security_images/rls.png)
+
+## Ahora con el certificado, llave simétrica, asimétrica y cifrados
+
+Como vimos en clase un certificado se usa para cifrar, firmar y proteger otros objetos o llaves.
+Por otra parte las llaves asimétricas son similares, solo que no son 1:1.
+
+Lo primero, es que hay que tener definido la master key, que por default no está.
+```sql
+CREATE MASTER KEY ENCRYPTION BY PASSWORD = '123456'; -- La master key protege todo lo demás digamos.
+GO
+```
+
+### Creada la master key, se puede crear el certificado:
+```sql
+CREATE CERTIFICATE CertificadoSoltura
+WITH SUBJECT = 'Certificado para seguridad en Soltura',
+EXPIRY_DATE = '2030-12-31';
+
+SELECT * FROM sys.certificates WHERE name = 'CertificadoSoltura';
+GO
+```
+
+Evidencia:
+
+![alt text](assets/security_images/certificado.png)
+
+### Crear llave asimétrica:
+```sql
+CREATE ASYMMETRIC KEY LlaveAsimSoltura
+WITH ALGORITHM = RSA_2048; -- Esto es el algoritmo y cantidad de bits para cifrar, tmb existe: 512, 1024.
+GO
+
+SELECT * FROM sys.asymmetric_keys WHERE name = 'LlaveAsimSoltura';
+```
+
+Evidencia:
+
+![alt text](assets/security_images/Asim.png)
+
+### Crear llave simétrica:
+```sql
+-- Esta se puede crear cifrando con certificado o con una llave asimétrica:
+-- 1) Con certificado:
+CREATE SYMMETRIC KEY LlaveSimSoltura
+WITH ALGORITHM = AES_256
+ENCRYPTION BY CERTIFICATE CertificadoSoltura; 
+GO
+
+-- 2) Con llave asimétrica:
+CREATE SYMMETRIC KEY LlaveSimSoltura2
+WITH ALGORITHM = AES_256
+ENCRYPTION BY ASYMMETRIC KEY LlaveAsimSoltura;
+GO
+
+SELECT * FROM sys.symmetric_keys WHERE name = 'LlaveSimSoltura';
+```
+
+Y se ve así:
+
+![alt text](assets/security_images/Sim.png)
+
+
+### Ahora para cifrar con la llave:
+```sql
+CREATE OR ALTER PROCEDURE [solturadb].[SP_CifrarPassword]
+    @UserId INT,
+    @Password NVARCHAR(50)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    IF NOT EXISTS (SELECT 1 FROM solturadb.soltura_users WHERE userid = @UserId)
+    BEGIN
+        RAISERROR('Usuario no encontrado', 16, 1);
+        RETURN;
+    END
+    
+    -- Abrir la llave simétrica
+    OPEN SYMMETRIC KEY LlaveSimSoltura
+    DECRYPTION BY CERTIFICATE CertificadoSoltura;
+    
+    -- Cifrar el password y actualizar el usuario
+    UPDATE solturadb.soltura_users
+    SET password = EncryptByKey(Key_GUID('LlaveSimSoltura'), @Password)
+    WHERE userid = @UserId;
+    
+    -- Cerrar la llave
+    CLOSE SYMMETRIC KEY LlaveSimSoltura;
+    
+    PRINT 'Contraseña cifrada y guardada correctamente';
+END;
+GO
+```
+
+### Para descrifrar usando las llaves:
+```sql
+CREATE OR ALTER PROCEDURE [solturadb].[SP_VerificarPassword]
+    @UserId INT,
+    @Password NVARCHAR(50),
+    @EsCorrecta BIT OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET @EsCorrecta = 0;
+    
+    DECLARE @PasswordGuardado NVARCHAR(50);
+    
+    -- Abrir la llave simétrica
+    OPEN SYMMETRIC KEY LlaveSimSoltura
+    DECRYPTION BY CERTIFICATE CertificadoSoltura;
+    
+    -- Obtener y descifrar el password almacenado
+    SELECT @PasswordGuardado = CONVERT(NVARCHAR(50), 
+        DecryptByKey(password))
+    FROM solturadb.soltura_users
+    WHERE userid = @UserId;
+    
+    -- Cerrar la llave
+    CLOSE SYMMETRIC KEY LlaveSimSoltura;
+    
+    -- Verificar la contraseña
+    IF @PasswordGuardado = @Password
+        SET @EsCorrecta = 1;
+END;
+GO
+```
+
+Un ejemplo de uso:
+```sql
+-- para cifrar una contraseña de un usuario:
+EXEC solturadb.SP_CifrarPassword @UserId = 1, @Password = '1234567';
+
+-- Y para verficar la contraseña de un usuario:
+DECLARE @Resultado BIT;
+EXEC solturadb.SP_VerificarPassword @UserId = 1, @Password = '1234567', @EsCorrecta = @Resultado OUTPUT;
+SELECT @Resultado AS PasswordCorrecto;
+```
+---
 # Consultas Misceláneas
 
 ---
