@@ -51,7 +51,7 @@
 - **Daniel Arce Campos** - Carnet: 2024174489
 - **Allan David Bolaños Barrientos** - Carnet: 2024145458
 - **Natalia Orozco Delgado** - Carnet: 2024099161
-- **Isaac Villalobos Apellido2** - Carnet: !!!!
+- **Isaac Villalobos Bonilla** - Carnet: 2024124285
 ---
 
 # Documentación para el diseño
