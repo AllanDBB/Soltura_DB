@@ -2406,19 +2406,124 @@ Dara el siguiente error en B: ![image](https://github.com/user-attachments/asset
 ## Niveles de Isolacion
 
 ## Cursor de Update
+En este caso probaremos el cursor cuando se bloquea y bloquea tambien los updates de manera que veremos lo que puede llegar a relentizar a los updates.
+Prueba con Scroll Locks y UPDLOCKS activo:
+```sql
+USE soltura;
+GO
+ALTER TABLE solturadb.soltura_users ADD mayorde12 BIT;
+GO
+BEGIN
+	UPDATE solturadb.soltura_users SET mayorde12 = 0;
+	DECLARE @userid INT;
+	DECLARE @birthday DATE;
+
+	-- Crear cursor con bloqueos de filas
+	DECLARE soltura_users_cursor CURSOR SCROLL_LOCKS FOR
+	SELECT userid, birthday
+	FROM solturadb.soltura_users WITH (ROWLOCK, UPDLOCK);
+
+	OPEN soltura_users_cursor; --ABRIMOS EL CURSOR
+
+	FETCH NEXT FROM soltura_users_cursor INTO @userid, @birthday;
+	WHILE @@FETCH_STATUS = 0 --Va fila por fila
+	BEGIN
+		-- Verificar si el usuario tiene mas de 12 años y si es asi les pone 1
+		IF DATEDIFF(DAY, @birthday, GETDATE()) >= 12 * 365.25
+		BEGIN
+			UPDATE solturadb.soltura_users
+			SET mayorde12 = 1
+			WHERE userid = @userid;
+		END
+		WAITFOR DELAY '00:00:01';
+		FETCH NEXT FROM soltura_users_cursor INTO @userid, @birthday;
+	END
+	CLOSE soltura_users_cursor; --CERRAMOS EL CURSOR
+	DEALLOCATE soltura_users_cursor; --Libera toda la memoria asociada al cursor
+END
+SELECT * FROM solturadb.soltura_users;
+ALTER TABLE solturadb.soltura_users DROP COLUMN mayorde12;
+GO
+```
+Este seria el query que se ejecutaria a la vez y tardara muchisimo porque tiene que esperar a que el cursor termine.
+```sql
+USE soltura;
+GO
+UPDATE solturadb.soltura_users
+SET birthday = DATEADD(MONTH, -1, birthday);
+```
+
+Este seria el caso sin el scroll locks ni updlocks:
+```sql
+ALTER TABLE solturadb.soltura_users ADD mayorde12 BIT;
+GO
+
+BEGIN
+	UPDATE solturadb.soltura_users SET mayorde12 = 0;
+
+	DECLARE @userid INT;
+	DECLARE @birthday DATE;
+
+	DECLARE soltura_users_cursor CURSOR FOR
+	SELECT userid, birthday
+	FROM solturadb.soltura_users;
+
+	OPEN soltura_users_cursor;
+
+	FETCH NEXT FROM soltura_users_cursor INTO @userid, @birthday;
+
+	WHILE @@FETCH_STATUS = 0
+	BEGIN
+		IF DATEDIFF(DAY, @birthday, GETDATE()) >= 12 * 365.25
+		BEGIN
+			UPDATE solturadb.soltura_users
+			SET mayorde12 = 1
+			WHERE userid = @userid;
+		END
+		WAITFOR DELAY '00:00:01';
+		FETCH NEXT FROM soltura_users_cursor INTO @userid, @birthday;
+	END
+
+	CLOSE soltura_users_cursor;
+	DEALLOCATE soltura_users_cursor;
+END
+SELECT * FROM solturadb.soltura_users;
+ALTER TABLE solturadb.soltura_users DROP COLUMN mayorde12;
+GO
+```
+Este seria el query que se ejecutaria a la vez y no tardara porque no tiene que esperar a que el cursor termine. Se ejecuta de una vez.
+```sql
+USE soltura;
+GO
+UPDATE solturadb.soltura_users
+SET birthday = DATEADD(MONTH, -1, birthday);
+```
+
+Notese que el cursor aun sin bloqueo es muy mala opcion y deberia de hacerse con un simple update pero si uno no lo tiene contemplado puede atrasar toda la base de datos por algo simple. Ejemplo de la solucion optima:
+```sql
+USE soltura;
+GO
+ALTER TABLE solturadb.soltura_users ADD mayorde12 BIT;
+GO
+BEGIN
+	UPDATE solturadb.soltura_users
+	SET mayorde12 = 1
+	WHERE DATEDIFF(DAY, birthday, GETDATE()) >= 12 * 365.25;
+END
+SELECT * FROM solturadb.soltura_users;
+ALTER TABLE solturadb.soltura_users DROP COLUMN mayorde12;
+GO
+```
+
+CASOS DE USO PARA EL SCROLL LOCKS:
+Rowlock: Bloqueara la fila en la que esta parado el cursor, esto genera problemas porque aunque no afecte a la columna fila que estoy intentando usar el rowlock la bloqueara y no me dejara usarla hasta que acabe con ella haciendola muy poco optima. Se debe evitar cuando se tienen varios querys que acceden a diferentes columnas en la misma fila.
+Updlock: No permitira que se actualice nada en la fila que recorre el cursor causando perdida de tiempo para otros querys que quieren acceder y cambiar un simple dato.
+No se deberia usar: para datos que son accedidos constantemente por varios querys, generando bloqueos que retrasan a otras operaciones, tampoco se deben de usar en volumen de datos grandes al ser lentos y consumir mucha memoria.
+Se podria usar (pero mejor no): Si no hay otros querys queriendo acceder a la informacion puede llegar a ser util para simplificar la logica detras de los algoritmos que vayamos a implementar y tambien puede ser util si hay pocas filas por las que pase el cursor esto porque aunque bloquee unas filas al ser pocas sera poco significativo.
 
 ## Transacción de Volumen
 Nuestra transacción de volumen se basara en el canje de los beneficios antes adquiridos al notarse que será la operacion más usada y la razón por la cual el usuario quiere usar nuestros servicios, a esta la estresaremos para ver su capacidad maxima y mejorarla.
 ## Transacciones Por Segundo Máximo
 ## Triplicar las Transacciones Por Segundo Máximo
-
-
-
-
-
-
-
-
-
 ---
 # Soltura ft. PaymentAssistant
