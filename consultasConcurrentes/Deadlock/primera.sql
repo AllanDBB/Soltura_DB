@@ -1,3 +1,5 @@
+USE soltura;
+GO
 --Transaccion Primera
 BEGIN TRANSACTION;
 UPDATE solturadb.soltura_benefits SET enabled = 0 WHERE benefitsid = 1; -- Bloquea benefits hasta que se haga el commit

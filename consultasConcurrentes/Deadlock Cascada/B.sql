@@ -1,3 +1,5 @@
+USE soltura;
+GO
 --Transaccion B
 BEGIN TRANSACTION;
 -- Bloquea redemptions. que lo ocupa C

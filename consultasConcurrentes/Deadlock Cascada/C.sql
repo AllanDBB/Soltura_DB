@@ -1,3 +1,5 @@
+USE soltura;
+GO
 --Transaccion C
 BEGIN TRANSACTION;
 UPDATE solturadb.soltura_users SET email = 'deadlockhater@gmail.com' WHERE userid = 1; -- Bloquea user hasta que se haga el commit. Que lo ocupa A

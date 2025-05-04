@@ -1,9 +1,8 @@
 ---------------------------------------------------------------------------------------------------------------------------------------
---READ UNCOMMITTED: TIENE PROBLEMAS DE LECTURAS SUCIAS, NONREPETABLE READ Y LECTURAS FANTASMAS
-
 --EJECUTAR (A) READ COMMITTED
 --READ UNCOMMITED ERROR READ DIRTY
 --Cambiamos a 0x01 el bit entonces el otro lo llega a leer pero nunca hacemos commit por lo que leyo la otra transaccion fue erroneo (dirty read)
+UPDATE solturadb.soltura_benefits SET enabled = 0x01 WHERE benefitsid = 1;
 BEGIN TRANSACTION;
 UPDATE solturadb.soltura_benefits SET enabled = 0x00 WHERE benefitsid = 1;
 WAITFOR DELAY '00:00:05';

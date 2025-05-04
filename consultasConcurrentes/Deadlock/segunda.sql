@@ -1,3 +1,5 @@
+USE soltura;
+GO
 --Transaccion Segunda
 BEGIN TRANSACTION;
 -- Bloquea redemptions.
