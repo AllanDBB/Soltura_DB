@@ -45,7 +45,7 @@
   - [Bitácora en otro SQL Server.](#bitácora-en-otro-sql-server)
 - [Concurrencia](#concurrencia)
   - [Deadlocks entre Dos Transacciones]
-  - [Deadlocks en Cascada]
+  - [Deadlocks en Cascada](#Deadlocks-en-Cascada)
   - [Niveles de Isolacion]
   - [Cursor de Update]
   - [Transacción de Volumen]
@@ -2324,6 +2324,21 @@ Y como se observa se creo el log :)
 
 
 # Concurrencia
+## Deadlocks entre Dos Transacciones
+## Deadlocks en Cascada
+## Niveles de Isolacion
+## Cursor de Update
+## Transacción de Volumen
+## Transacciones Por Segundo Máximo
+## Triplicar las Transacciones Por Segundo Máximo
+
+
+
+
+
+
+
+
 
 ---
 # Soltura ft. PaymentAssistant
