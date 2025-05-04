@@ -1,14 +1,4 @@
---Tiene que ejecutarse primero el query A para que den los resultados dados claramente si no se ejectutan no dara dirty read por eso se tiene que hacer uno por uno
---Mediante la parte A y B.
-
---EJECUTAR (A) READ UNCOMMITTED
---READ UNCOMMITED ERROR READ DIRTY
-SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED; --Cambiamos a 0x01 el bit en la otra transaccion entonces este lo llega a leer pero como nunca hace commit lo que leyo la transaccion fue erroneo (dirty read)
-BEGIN TRANSACTION;
-SELECT * FROM solturadb.soltura_benefits WHERE benefitsid = 1;
-COMMIT;
 ---------------------------------------------------------------------------------------------------------------------------------------
-
 --EJECUTAR (B) READ COMMITTED
 --READ COMMITED ERROR NONREPETABLE READ
 SET TRANSACTION ISOLATION LEVEL READ COMMITTED;
@@ -19,10 +9,10 @@ WAITFOR DELAY '00:00:10'; --Retraso para poder hacer el cambio
 SELECT AVG(amount) AS ValorPromedioDespues FROM solturadb.soltura_planprices; --Cambio el valor del promedio del costo al ver que aumento aunque no deberia de generar ese read diferente
 COMMIT;
 ---------------------------------------------------------------------------------------------------------------------------------------
-
---EJECUTAR (C) REPEATABLE READ
---REPEATABLE READ ERROR LECTURAS FANTASMAS
-SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+--EJECUTAR PRIMERO ESTA
+--EJECUTAR (C) READ COMMITED 
+--READ COMMITED ERROR LECTURAS FANTASMAS
+SET TRANSACTION ISOLATION LEVEL READ COMMITTED;
 BEGIN TRANSACTION;
 DECLARE @TotalUsers INT;
 SELECT @TotalUsers = COUNT(DISTINCT planpricesid) FROM solturadb.soltura_planprices;
@@ -41,13 +31,4 @@ SELECT
     SUM(amount)/ @TotalUsers AS GananciaPorUsuario
 FROM solturadb.soltura_planprices; --Ahora que se hizo el insert el promedio dara mas que el verdadero al tener un usuario no contado
 
-COMMIT;
----------------------------------------------------------------------------------------------------------------------------------------
-
---EJECUTAR (D) REPEATABLE READ
---SERIALIZABLE PROBLEMAS DE BLOQUEOS PROLONGADOS
-SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;
-BEGIN TRANSACTION;
-SELECT *  FROM solturadb.soltura_planprices WHERE [current] = 0x01; --Lee precios actuales pero esto los bloqueara para el otro query generando esos bloqueos prolongados
-WAITFOR DELAY '00:00:10';
 COMMIT;
