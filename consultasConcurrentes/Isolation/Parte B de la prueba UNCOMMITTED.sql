@@ -42,3 +42,11 @@ SELECT
 FROM solturadb.soltura_planprices; --Ahora que se hizo el insert el promedio dara mas que el verdadero al tener un usuario no contado
 
 COMMIT;
+---------------------------------------------------------------------------------------------------------------------------------------
+--EJECUTAR (D) REPEATABLE READ
+--SERIALIZABLE PROBLEMAS DE BLOQUEOS PROLONGADOS
+SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
+BEGIN TRANSACTION;
+SELECT *  FROM solturadb.soltura_planprices WHERE [current] = 0x01; --Lee precios actuales pero esto los bloqueara para el otro query generando esos bloqueos prolongados
+WAITFOR DELAY '00:00:10';
+COMMIT;

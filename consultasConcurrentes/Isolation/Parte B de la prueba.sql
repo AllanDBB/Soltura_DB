@@ -44,7 +44,7 @@ FROM solturadb.soltura_planprices; --Ahora que se hizo el insert el promedio dar
 COMMIT;
 ---------------------------------------------------------------------------------------------------------------------------------------
 
---EJECUTAR (D) REPEATABLE READ
+--EJECUTAR (D) SERIALIZABLE
 --SERIALIZABLE PROBLEMAS DE BLOQUEOS PROLONGADOS
 SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;
 BEGIN TRANSACTION;

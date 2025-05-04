@@ -1,0 +1,4 @@
+--EJECUTAR (A) primero el de A y luego el de B
+--EJECUTAR (B) primero el de B y luego el de A
+--EJECUTAR (C) primero el de B y luego el de A
+--EJECUTAR (D) primero el de B y luego el de A

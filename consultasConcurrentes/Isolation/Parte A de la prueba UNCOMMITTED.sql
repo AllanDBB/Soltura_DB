@@ -27,3 +27,11 @@ INSERT INTO solturadb.soltura_planprices (amount, recurrencytype, posttime, enda
 VALUES (100.00, 1, GETDATE(), DATEADD(YEAR, 1, GETDATE()), 0x01, 1, 1);
 WAITFOR DELAY '00:00:05';
 COMMIT;
+---------------------------------------------------------------------------------------------------------------------------------------
+--EJECUTAR (D) READ UNCOMMITTED
+--SERIALIZABLE PROBLEMAS DE BLOQUEOS PROLONGADOS no los genera al ser read uncommitted
+BEGIN TRANSACTION;
+-- Intentar insertar un nuevo precio pero tardara un montoooooon al esperar ese bloqueo prolongado que trae Serializable
+INSERT INTO solturadb.soltura_planprices (amount, recurrencytype, posttime, endate, [current], currencyid, subscriptionid)
+VALUES (99.99, 1, GETDATE(), DATEADD(YEAR, 1, GETDATE()), 0x01, 1, 1);
+COMMIT;
