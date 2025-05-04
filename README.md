@@ -44,13 +44,13 @@
   - [Consulta y exportar a CSV.](#consulta-y-exportar-a-csv)
   - [Bitácora en otro SQL Server.](#bitácora-en-otro-sql-server)
 - [Concurrencia](#concurrencia)
-  -[Deadlocks entre Dos Transacciones]
-  -[Deadlocks en Cascada]
-  -[Niveles de Isolacion]
-  -[Cursor de Update]
-  -[Transacción de Volumen]
-  -[Transacciones Por Segundo Máximo]
-  -[Triplicar las Transacciones Por Segundo Máximo]
+  - [Deadlocks entre Dos Transacciones]
+  - [Deadlocks en Cascada]
+  - [Niveles de Isolacion]
+  - [Cursor de Update]
+  - [Transacción de Volumen]
+  - [Transacciones Por Segundo Máximo]
+  - [Triplicar las Transacciones Por Segundo Máximo]
 - [Soltura ft. PaymentAssistant](#soltura-ft-paymentassistant)
 
 ---
