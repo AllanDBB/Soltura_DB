@@ -2325,6 +2325,39 @@ Y como se observa se creo el log :)
 
 # Concurrencia
 ## Deadlocks entre Dos Transacciones
+Primero ejectuamos este query que pedira de acceder a benefits pero benefits estara bloqueada por El segundo query que pedira redemptions pero Redemptions es ocupado por el primero entonces se vuelve un deadlock
+```sql
+USE soltura;
+GO
+--Transaccion Primera
+BEGIN TRANSACTION;
+UPDATE solturadb.soltura_benefits SET enabled = 0 WHERE benefitsid = 1; -- Bloquea benefits hasta que se haga el commit
+
+WAITFOR DELAY '00:00:05';
+
+-- Ocupa redemptions para acabar pero redemptions esta bloqueada por una que ocupa benefits lo que implica que nunca podra salir
+UPDATE solturadb.soltura_redemptions SET reference1 = 99999 WHERE userid = 1;
+
+COMMIT;
+```
+```sql
+USE soltura;
+GO
+--Transaccion Segunda
+BEGIN TRANSACTION;
+-- Bloquea redemptions.
+UPDATE solturadb.soltura_redemptions SET reference1 = 88888 WHERE userid = 1;
+
+-- Da tiempo para que la otra bloque benefits
+WAITFOR DELAY '00:00:05';
+
+-- Ocupa benefits para acabar pero benefits esta bloqueada por una que ocupa redemptions lo que implica que nunca podra salir
+UPDATE solturadb.soltura_benefits SET enabled = 1 WHERE benefitsid = 1;
+COMMIT;
+```
+Dara un error:
+![image](https://github.com/user-attachments/assets/1486abd4-65b3-48e1-8cd6-d13c10d1bdc6)
+
 ## Deadlocks en Cascada
 ## Niveles de Isolacion
 ## Cursor de Update
