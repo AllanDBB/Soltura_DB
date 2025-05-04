@@ -2408,6 +2408,7 @@ Dara el siguiente error en B: ![image](https://github.com/user-attachments/asset
 ## Cursor de Update
 
 ## Transacción de Volumen
+Nuestra transacción de volumen se basara en el canje de los beneficios antes adquiridos al notarse que será la operacion más usada y la razón por la cual el usuario quiere usar nuestros servicios, a esta la estresaremos para ver su capacidad maxima y mejorarla.
 ## Transacciones Por Segundo Máximo
 ## Triplicar las Transacciones Por Segundo Máximo
 
