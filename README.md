@@ -2498,7 +2498,7 @@ Caso B: No se puede repetir la lectura entonces al ser sumado el costo total par
 ![image](https://github.com/user-attachments/assets/ab103650-3511-44e4-9d9b-c2e3d59d3129)
 Caso C: Calcula un promedio erroneo al haber sacado el numero de usuarios antes y como se inserto un nuevo usuario pagando genera que el promedio se vuelva mas dinero/menos usuarios reales.
 ![image](https://github.com/user-attachments/assets/59aeadb1-1b23-48f0-a2dd-96c437bc0de8)
-Caso D: El error no se ve, ya qeu el bloqueo no es prolongado no genera tiempos exagerados de espera. se ejecuta de manera rapida.
+Caso D: El error no se ve, ya que el bloqueo no es prolongado no genera tiempos exagerados de espera. se ejecuta de manera rapida.
 
 NIVEL READ COMMITTED: TIENE DE NONREPETABLE READ Y LECTURAS FANTASMAS
 ```sql
@@ -2596,31 +2596,200 @@ Caso B: No se puede repetir la lectura entonces al ser sumado el costo total par
 ![image](https://github.com/user-attachments/assets/ab103650-3511-44e4-9d9b-c2e3d59d3129)
 Caso C: Calcula un promedio erroneo al haber sacado el numero de usuarios antes y como se inserto un nuevo usuario pagando genera que el promedio se vuelva mas dinero/menos usuarios reales.
 ![image](https://github.com/user-attachments/assets/59aeadb1-1b23-48f0-a2dd-96c437bc0de8)
-Caso D: El error no se ve, ya qeu el bloqueo no es prolongado no genera tiempos exagerados de espera. se ejecuta de manera rapida.
+Caso D: El error no se ve, ya que el bloqueo no es prolongado no genera tiempos exagerados de espera. se ejecuta de manera rapida.
 
-
-
-
-
-
-
-
-
-
-
-NIVEL READ UNCOMMITTED: TIENE PROBLEMAS DE LECTURAS SUCIAS, NONREPETABLE READ Y LECTURAS FANTASMAS
+NIVEL REPEATABLE READ: TIENE PROBLEMAS DE LECTURAS FANTASMAS.
 ```sql
+---------------------------------------------------------------------------------------------------------------------------------------
+--EJECUTAR (A) REPEATABLE READ
+--REPEATABLE READ ERROR READ DIRTY no sucede al ser REPEATABLE READ
+--Cambiamos a 0x01 el bit entonces el otro lo llega a leer pero nunca hacemos commit por lo que leyo la otra transaccion fue erroneo (dirty read)
+BEGIN TRANSACTION;
+UPDATE solturadb.soltura_benefits SET enabled = 0x00 WHERE benefitsid = 1;
+WAITFOR DELAY '00:00:05';
+ROLLBACK;
+SELECT * FROM solturadb.soltura_benefits WHERE benefitsid = 1;
+---------------------------------------------------------------------------------------------------------------------------------------
+--EJECUTAR (B) REPEATABLE READ
+--REPEATABLE READ ERROR NONREPETABLE READ como dice el nombre REPEATABLE READ se puede repetir el read no sucede ese error
+--Cambiar el valor de amount haciendo que el promedio cambie y se muestra un valor diferente.
+BEGIN TRANSACTION;
+UPDATE solturadb.soltura_planprices SET amount = amount + 10 WHERE planpricesid = 1; --Le subimos el precio haciendo que el promedio de mayor pero esto genera que el read haya cambiado en el tiempo
+COMMIT;
+---------------------------------------------------------------------------------------------------------------------------------------
+--REPEATABLE READ: TIENE PROBLEMAS DE LECTURAS FANTASMAS
+--EJECUTAR (C) REPEATABLE READ
+--REPEATABLE READ ERROR LECTURAS FANTASMAS
+BEGIN TRANSACTION;
+INSERT INTO solturadb.soltura_planprices (amount, recurrencytype, posttime, endate, [current], currencyid, subscriptionid)
+VALUES (100.00, 1, GETDATE(), DATEADD(YEAR, 1, GETDATE()), 0x01, 1, 1);
+WAITFOR DELAY '00:00:05';
+COMMIT;
+---------------------------------------------------------------------------------------------------------------------------------------
+--EJECUTAR (D) REPEATABLE READ
+--REPEATABLE READ PROBLEMAS DE BLOQUEOS PROLONGADOS no sucede
+BEGIN TRANSACTION;
+-- Intentar insertar un nuevo precio pero tardara un montoooooon al esperar ese bloqueo prolongado que trae Serializable
+INSERT INTO solturadb.soltura_planprices (amount, recurrencytype, posttime, endate, [current], currencyid, subscriptionid)
+VALUES (99.99, 1, GETDATE(), DATEADD(YEAR, 1, GETDATE()), 0x01, 1, 1);
+COMMIT;
 ```
 ```sql
+--EJECUTAR (A) REPEATABLE READ error no sucede
+SET TRANSACTION ISOLATION LEVEL REPEATABLE READ; --Cambiamos a 0x01 el bit en la otra transaccion entonces este lo llega a leer pero como nunca hace commit lo que leyo la transaccion fue erroneo (dirty read)
+BEGIN TRANSACTION;
+SELECT * FROM solturadb.soltura_benefits WHERE benefitsid = 1;
+COMMIT;
+---------------------------------------------------------------------------------------------------------------------------------------
+
+--EJECUTAR (B) REPEATABLE READ
+--REPEATABLE READ ERROR NONREPETABLE READ no sucede
+SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+BEGIN TRANSACTION;
+-- Primera lectura: Calcular el promedio de los precios
+SELECT AVG(amount) AS ValorPromedioAntes FROM solturadb.soltura_planprices; --Calcula el promedio por primera vez
+WAITFOR DELAY '00:00:10'; --Retraso para poder hacer el cambio
+SELECT AVG(amount) AS ValorPromedioDespues FROM solturadb.soltura_planprices; --Cambio el valor del promedio del costo al ver que aumento aunque no deberia de generar ese read diferente
+COMMIT;
+---------------------------------------------------------------------------------------------------------------------------------------
+
+--EJECUTAR (C) REPEATABLE READ
+--REPEATABLE READ ERROR LECTURAS FANTASMAS
+SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+BEGIN TRANSACTION;
+DECLARE @TotalUsers INT;
+SELECT @TotalUsers = COUNT(DISTINCT planpricesid) FROM solturadb.soltura_planprices;
+
+SELECT 
+    @TotalUsers AS Usuarios_Totales,
+    SUM(amount) AS Ganancias_Totales,
+    SUM(amount) / @TotalUsers AS GananciaPorUsuario
+FROM solturadb.soltura_planprices; --Las ganancias antes del insert / numeros de usuarios dara un promedio verdadero en este momento
+
+WAITFOR DELAY '00:00:10';
+
+SELECT 
+    @TotalUsers AS Usuarios_Totales,
+    SUM(amount) AS Ganancias_Totales,
+    SUM(amount)/ @TotalUsers AS GananciaPorUsuario
+FROM solturadb.soltura_planprices; --Ahora que se hizo el insert el promedio dara mas que el verdadero al tener un usuario no contado
+
+COMMIT;
+---------------------------------------------------------------------------------------------------------------------------------------
+
+--EJECUTAR (D) REPEATABLE READ
+--REPEATABLE READ PROBLEMAS DE BLOQUEOS PROLONGADOS no sucede
+SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+BEGIN TRANSACTION;
+SELECT *  FROM solturadb.soltura_planprices WHERE [current] = 0x01; --Lee precios actuales pero esto los bloqueara para el otro query generando esos bloqueos prolongados
+WAITFOR DELAY '00:00:10';
+COMMIT;
 ```
-Caso A: Aunque se hace un rollback evitando que se cambie el enable de 1 a 0, como tiene lectura sucia lee 0.
-![image](https://github.com/user-attachments/assets/03c8e017-c53d-4095-bbb6-d272154ce3dc)
-Caso B: No se puede repetir la lectura entonces al ser sumado el costo total para usuarios de los planes cuando se inserta un valor en medio se genera un nonrepeatable read.
-![image](https://github.com/user-attachments/assets/ab103650-3511-44e4-9d9b-c2e3d59d3129)
+Caso A: Aunque se hace un rollback evitando que se cambie el enable de 1 a 0, como tiene no lectura sucia lee 1.
+![image](https://github.com/user-attachments/assets/9dc2bac5-eb81-408e-9629-bfa2a85b975a)
+Caso B: Se puede repetir la lectura entonces no habra pobremas con el avg que proporciona la lectura dado.
+![image](https://github.com/user-attachments/assets/1048345f-47aa-4201-ae35-7bbafa22503a)
 Caso C: Calcula un promedio erroneo al haber sacado el numero de usuarios antes y como se inserto un nuevo usuario pagando genera que el promedio se vuelva mas dinero/menos usuarios reales.
 ![image](https://github.com/user-attachments/assets/59aeadb1-1b23-48f0-a2dd-96c437bc0de8)
-Caso D: El error no se ve, ya qeu el bloqueo no es prolongado no genera tiempos exagerados de espera. se ejecuta de manera rapida.
+Caso D: El error no se ve, ya que el bloqueo no es prolongado no genera tiempos exagerados de espera. se ejecuta de manera rapida.
 
+NIVEL SERIALIZABLE: TIENE PROBLEMAS DE BLOQUEOS PROLONGADOS.
+```sql
+---------------------------------------------------------------------------------------------------------------------------------------
+--EJECUTAR (A) SERIALIZABLE
+--SERIALIZABLE ERROR READ DIRTY NO LO TIENE
+--Cambiamos a 0x01 el bit entonces el otro lo llega a leer pero nunca hacemos commit por lo que leyo la otra transaccion fue erroneo (dirty read)
+BEGIN TRANSACTION;
+UPDATE solturadb.soltura_benefits SET enabled = 0x00 WHERE benefitsid = 1;
+WAITFOR DELAY '00:00:05';
+ROLLBACK;
+SELECT * FROM solturadb.soltura_benefits WHERE benefitsid = 1;
+---------------------------------------------------------------------------------------------------------------------------------------
+--EJECUTAR (B) SERIALIZABLE
+--SERIALIZABLE ERROR NONREPETABLE READ NO LO TIENE
+--Cambiar el valor de amount haciendo que el promedio cambie y se muestra un valor diferente.
+BEGIN TRANSACTION;
+UPDATE solturadb.soltura_planprices SET amount = amount + 10 WHERE planpricesid = 1; --Le subimos el precio haciendo que el promedio de mayor pero esto genera que el read haya cambiado en el tiempo
+COMMIT;
+---------------------------------------------------------------------------------------------------------------------------------------
+--EJECUTAR (C) SERIALIZABLE
+--SERIALIZABLE ERROR LECTURAS FANTASMAS NO LO TIENE
+BEGIN TRANSACTION;
+INSERT INTO solturadb.soltura_planprices (amount, recurrencytype, posttime, endate, [current], currencyid, subscriptionid)
+VALUES (100.00, 1, GETDATE(), DATEADD(YEAR, 1, GETDATE()), 0x01, 1, 1);
+WAITFOR DELAY '00:00:05';
+COMMIT;
+---------------------------------------------------------------------------------------------------------------------------------------
+--SERIALIZABLE: Es el bloqueo excesivo que puede ocurrir en sistemas con alta concurrencia
+--Este nivel de aislamiento bloquea las filas existenteslo que puede causar bloqueos prolongados y reducir el rendimiento.
+
+--EJECUTAR (D) SERIALIZABLE
+--SERIALIZABLE PROBLEMAS DE BLOQUEOS PROLONGADOS
+BEGIN TRANSACTION;
+-- Intentar insertar un nuevo precio pero tardara un montoooooon al esperar ese bloqueo prolongado que trae Serializable
+INSERT INTO solturadb.soltura_planprices (amount, recurrencytype, posttime, endate, [current], currencyid, subscriptionid)
+VALUES (99.99, 1, GETDATE(), DATEADD(YEAR, 1, GETDATE()), 0x01, 1, 1);
+COMMIT;
+```
+```sql
+--EJECUTAR (A) SERIALIZABLE
+--SERIALIZABLE ERROR READ DIRTY
+SET TRANSACTION ISOLATION LEVEL SERIALIZABLE; --Cambiamos a 0x01 el bit en la otra transaccion entonces este lo llega a leer pero como nunca hace commit lo que leyo la transaccion fue erroneo (dirty read)
+BEGIN TRANSACTION;
+SELECT * FROM solturadb.soltura_benefits WHERE benefitsid = 1;
+COMMIT;
+---------------------------------------------------------------------------------------------------------------------------------------
+
+--EJECUTAR (B) SERIALIZABLE
+--SERIALIZABLE ERROR NONREPETABLE READ
+SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;
+BEGIN TRANSACTION;
+-- Primera lectura: Calcular el promedio de los precios
+SELECT AVG(amount) AS ValorPromedioAntes FROM solturadb.soltura_planprices; --Calcula el promedio por primera vez
+WAITFOR DELAY '00:00:10'; --Retraso para poder hacer el cambio
+SELECT AVG(amount) AS ValorPromedioDespues FROM solturadb.soltura_planprices; --Cambio el valor del promedio del costo al ver que aumento aunque no deberia de generar ese read diferente
+COMMIT;
+---------------------------------------------------------------------------------------------------------------------------------------
+
+--EJECUTAR (C) SERIALIZABLE
+--SERIALIZABLE ERROR LECTURAS FANTASMAS
+SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;
+BEGIN TRANSACTION;
+DECLARE @TotalUsers INT;
+SELECT @TotalUsers = COUNT(DISTINCT planpricesid) FROM solturadb.soltura_planprices;
+
+SELECT 
+    @TotalUsers AS Usuarios_Totales,
+    SUM(amount) AS Ganancias_Totales,
+    SUM(amount) / @TotalUsers AS GananciaPorUsuario
+FROM solturadb.soltura_planprices; --Las ganancias antes del insert / numeros de usuarios dara un promedio verdadero en este momento
+
+WAITFOR DELAY '00:00:10';
+
+SELECT 
+    @TotalUsers AS Usuarios_Totales,
+    SUM(amount) AS Ganancias_Totales,
+    SUM(amount)/ @TotalUsers AS GananciaPorUsuario
+FROM solturadb.soltura_planprices; --Ahora que se hizo el insert el promedio dara mas que el verdadero al tener un usuario no contado
+
+COMMIT;
+---------------------------------------------------------------------------------------------------------------------------------------
+
+--EJECUTAR (D) SERIALIZABLE
+--SERIALIZABLE PROBLEMAS DE BLOQUEOS PROLONGADOS
+SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;
+BEGIN TRANSACTION;
+SELECT *  FROM solturadb.soltura_planprices WHERE [current] = 0x01; --Lee precios actuales pero esto los bloqueara para el otro query generando esos bloqueos prolongados
+WAITFOR DELAY '00:00:10';
+COMMIT;
+```
+Caso A: Aunque se hace un rollback evitando que se cambie el enable de 1 a 0, como tiene no lectura sucia lee 1.
+![image](https://github.com/user-attachments/assets/9dc2bac5-eb81-408e-9629-bfa2a85b975a)
+Caso B: Se puede repetir la lectura entonces no habra pobremas con el avg que proporciona la lectura dado.
+![image](https://github.com/user-attachments/assets/1048345f-47aa-4201-ae35-7bbafa22503a)
+Caso C: El promedio al no permitir phantoms se calcula de manera perfecta en ambos casos.
+![image](https://github.com/user-attachments/assets/4b9a44d2-fc43-4542-9f72-41197452bcf5)
+Caso D: El error ocurre en cuanto tiempo al tener bloqueos tan prolongados, terminara haciendo que se relentice muchisimo los querys relacionados y cualquier serializable. Solo usarse en casos de total hermeticidad.
 
 ## Cursor de Update
 En este caso probaremos el cursor cuando se bloquea y bloquea tambien los updates de manera que veremos lo que puede llegar a relentizar a los updates.
