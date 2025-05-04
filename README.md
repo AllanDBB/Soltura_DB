@@ -2401,10 +2401,12 @@ WAITFOR DELAY '00:00:08';
 UPDATE solturadb.soltura_redemptions SET reference1 = 99999 WHERE userid = 1;
 COMMIT;
 ```
-![image](https://github.com/user-attachments/assets/fea881f0-4a14-41b0-ac97-77274cf7314e)
+Dara el siguiente error en B: ![image](https://github.com/user-attachments/assets/fea881f0-4a14-41b0-ac97-77274cf7314e)
 ![WhatsApp Image 2025-05-03 at 11 37 00_3230305a](https://github.com/user-attachments/assets/81437f7a-df22-4421-9810-62a97bc7596b)
 ## Niveles de Isolacion
+
 ## Cursor de Update
+
 ## Transacción de Volumen
 ## Transacciones Por Segundo Máximo
 ## Triplicar las Transacciones Por Segundo Máximo
