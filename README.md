@@ -2325,7 +2325,7 @@ Y como se observa se creo el log :)
 
 # Concurrencia
 ## Deadlocks entre Dos Transacciones
-Primero ejectuamos este query que pedira de acceder a benefits pero benefits estara bloqueada por El segundo query que pedira redemptions pero Redemptions es ocupado por el primero entonces se vuelve un deadlock
+Primero ejectuamos este query que pedira de acceder a benefits pero benefits estara bloqueada por El segundo query que pedira redemptions pero Redemptions es ocupado por el primero entonces se vuelve una victima del deadlock.
 ```sql
 USE soltura;
 GO
@@ -2357,8 +2357,52 @@ COMMIT;
 ```
 Dara un error:
 ![image](https://github.com/user-attachments/assets/1486abd4-65b3-48e1-8cd6-d13c10d1bdc6)
-
 ## Deadlocks en Cascada
+Este deadlock es interesante porque se bloquea al A ocupar users que esta siendo usado por C y C ocupa lo que esta usando B y B ocupa lo que esta usando A, como una serpiente comiendose la cola.
+```sql
+USE soltura;
+GO
+--Transaccion A
+BEGIN TRANSACTION;
+UPDATE solturadb.soltura_benefits SET enabled = 0 WHERE benefitsid = 1; -- Bloquea benefits hasta que se haga el commit, lo que ocupa B
+
+WAITFOR DELAY '00:00:08';
+
+-- Se bloquea al A ocupar users que esta siendo usado por C y C ocupa lo que esta usando B y B ocupa lo que esta usando A
+UPDATE solturadb.soltura_users SET email = 'deadlocklover@gmail.com' WHERE userid = 1;
+COMMIT;
+
+```
+```sql
+USE soltura;
+GO
+--Transaccion B
+BEGIN TRANSACTION;
+-- Bloquea redemptions. que lo ocupa C
+UPDATE solturadb.soltura_redemptions SET reference1 = 88888 WHERE userid = 1;
+
+-- Da tiempo para que la otra bloque benefits
+WAITFOR DELAY '00:00:08';
+
+-- Ocupa benefits para acabar pero benefits esta bloqueada por que A que ocupa users y C ocupa redemptions y B ocupa benefits y sigue el ciclo
+UPDATE solturadb.soltura_benefits SET enabled = 1 WHERE benefitsid = 1;
+COMMIT;
+```
+```sql
+USE soltura;
+GO
+--Transaccion C
+BEGIN TRANSACTION;
+UPDATE solturadb.soltura_users SET email = 'deadlockhater@gmail.com' WHERE userid = 1; -- Bloquea user hasta que se haga el commit. Que lo ocupa A
+
+WAITFOR DELAY '00:00:08';
+
+-- Se bloquea al C ocupar redemptions que esta siendo usado por B y B ocupa lo que esta usando A y A ocupa lo que esta usando C
+UPDATE solturadb.soltura_redemptions SET reference1 = 99999 WHERE userid = 1;
+COMMIT;
+```
+![image](https://github.com/user-attachments/assets/fea881f0-4a14-41b0-ac97-77274cf7314e)
+![WhatsApp Image 2025-05-03 at 11 37 00_3230305a](https://github.com/user-attachments/assets/81437f7a-df22-4421-9810-62a97bc7596b)
 ## Niveles de Isolacion
 ## Cursor de Update
 ## Transacción de Volumen
