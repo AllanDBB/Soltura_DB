@@ -2913,3 +2913,5 @@ Nuestra transacción de volumen se basara en el canje de los beneficios antes ad
 ## Triplicar las Transacciones Por Segundo Máximo
 ---
 # Soltura ft. PaymentAssistant
+Para la realización de esta última parte se utilizo Python Notebook con Pandas como herramienta para migrar la base de datos Payment Assistan a Soltura. A continuación se demostraran los scripts necesarios para migrar los datos solicitados en las instrucciones. También se demuestra el script para los inserts a MongoDB del banner y home page sobre el cambio de sistemas.
+
