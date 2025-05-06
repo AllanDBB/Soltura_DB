@@ -2917,7 +2917,7 @@ Nuestra transacción de volumen se basara en el canje de los beneficios antes ad
 # Soltura ft. PaymentAssistant
 Para la realización de esta última parte se utilizo Python Notebook con Pandas como herramienta para migrar la base de datos Payment Assistant a Soltura. A continuación se demostraran los scripts necesarios para migrar los datos solicitados en las instrucciones. También se demuestra el script para los inserts a MongoDB del banner y home page sobre el cambio de sistemas.
 ## Script para migrar los usuarios
-En este codigo nos conectamos ambas bases de datos con los datos respectivos, luego se crean la tablas para los usuarios migrados y otra que maneja que deben cambiar su contraseña, ya que se les asigna una temporal. Extrae los datos de los usuarios de payment y los inserta en los de soltura, manteniendo sus datos originales 
+En este codigo nos conectamos en ambas bases de datos con los datos respectivos de su servidor, luego se crean la tablas para los usuarios migrados y otra que maneja que deben cambiar su contraseña, ya que se les asigna una temporal. Extrae los datos de los usuarios de Payment y los inserta en los de Soltura, manteniendo sus datos originales 
 ```python
 import pandas as pd
 import pymysql
@@ -3009,4 +3009,290 @@ finally:
     mysql_conn.close()
     sqlserver_conn.close()
 ```
+## Script para migrar los modulos
+Esta tabla es necesaria para luego poder migrar los permisos, ya que tiene como llave foranea el modulo, entonces se debe transferir a Soltura. Se conecta a las bases ded datos, extrae los datos y los migra en la tabla de modulos de Soltura iterando columna por columna
+``` python
+import pandas as pd
+import pymysql
+import pyodbc
+from datetime import datetime
+
+#Se conecta a las dos bases de datos
+mysql_conn = pymysql.connect(host='localhost', user='root', password='123', database='paymentdb')  
+sqlserver_conn = pyodbc.connect('DRIVER={ODBC Driver 17 for SQL Server};SERVER=DANIEL2005\SQLEXPRESS;DATABASE=soltura;Trusted_Connection=yes;')
+
+try:
+    #Extrae los datos de la tabla modules
+    module_df = pd.read_sql("SELECT moduleid, name FROM payment_modules", mysql_conn)
+    
+
+    #Migra los datos a SQL Server iterando columna por columna
+    with sqlserver_conn.cursor() as cursor:
+        for _, row in module_df.iterrows():
+            cursor.execute("""
+                INSERT INTO solturadb.soltura_modules (moduleid, name)
+                VALUES (?, ?)
+            """, row['moduleid'], row['name'])
+        
+        sqlserver_conn.commit()
+    
+    print(f" Migración exitosa. {len(module_df)} módulos migrados")
+
+except Exception as e:
+    print(f" Error: {e}")
+finally:
+    mysql_conn.close()
+    sqlserver_conn.close()
+```
+## Script para migrar los permisos
+Este codigo trae de Payment la data de permisos, necesaria para que cada usuario pueda conservar sus permisos en Soltura. En el codigo se conectan a las bases de datos y extraen los datos de permissions, para que luego las vayan insertando en la misma tabla pero de Soltura iterando por las columnas
+``` python
+import pandas as pd
+import pymysql
+import pyodbc
+from datetime import datetime
+
+#Se conecta a las dos bases de datos
+mysql_conn = pymysql.connect(host='localhost', user='root', password='123', database='paymentdb')  
+sqlserver_conn = pyodbc.connect('DRIVER={ODBC Driver 17 for SQL Server};SERVER=DANIEL2005\SQLEXPRESS;DATABASE=soltura;Trusted_Connection=yes;')
+
+try:
+    #Extrae los datos de la tabla permissiones
+    permission_df = pd.read_sql("SELECT permissionid, description, code, moduleid FROM payment_permissions", mysql_conn)
+    
+    #Aumentamos el tamaño de la columna 'code'
+    with sqlserver_conn.cursor() as cursor:
+        cursor.execute("""
+            ALTER TABLE solturadb.soltura_permissions 
+            ALTER COLUMN code NVARCHAR(50)
+        """)
+        sqlserver_conn.commit()
+        print("Columna code ampliada ")
+    
+    #Migra los datos a SQL Server iterando columna por columna
+    with sqlserver_conn.cursor() as cursor:
+        for _, row in permission_df.iterrows():
+            cursor.execute("""
+                INSERT INTO solturadb.soltura_permissions (description, code, moduleid)
+                VALUES (?, ?, ?)
+            """, row['description'], row['code'], row['moduleid'])
+        
+        sqlserver_conn.commit()
+    
+    print(f"Migración exitosa. {len(permission_df)} permisos migrados")
+
+except Exception as e:
+    print(f"Error: {e}")
+finally:
+    mysql_conn.close()
+    sqlserver_conn.close()
+```
+## Script para migrar los permisos de usuarios
+Una vez que migramos los permisos de Payment, ya podemos migrar los permisos de usuario porque ocupabamos la llave foranea de permisos. Extraemos los datos de permisos de usuarios de Payment y antes de insertalos, iteramos en cada tabla verificando si el username de Payment es el mismo que el correo de Soltura en la tabla de users, ya que en ambas plataformas se maneja correo y username como lo mismo, si son iguales cuado se inserta en la tabla de permisos de usuario se le asigna el user id de la tabla de users. De esta manera se mantiene la relación de llaves foraneas con los datos migrados
+``` python
+import pandas as pd
+import pymysql
+import pyodbc
+
+# Conexión a las bases de datos
+mysql_conn = pymysql.connect(host='localhost', user='root', password='123', database='paymentdb')  
+sqlserver_conn = pyodbc.connect('DRIVER={ODBC Driver 17 for SQL Server};SERVER=DANIEL2005\SQLEXPRESS;DATABASE=soltura;Trusted_Connection=yes;')
+
+try:
+    # Renombrar la columna rolepermissionid a userpermissionid
+    with sqlserver_conn.cursor() as cursor:
+        try:
+            cursor.execute("""
+                EXEC sp_rename 'solturadb.soltura_userpermissions.rolepermissionid', 'userpermissionid', 'COLUMN'
+            """)
+            sqlserver_conn.commit()
+        except Exception as rename_error:
+            print(f"Nota: No se pudo renombrar la columna: {rename_error}")
+
+    # Extraer los datos de userpermissions desde MySQL
+    userpermissions_df = pd.read_sql("SELECT * FROM payment_userpermissions", mysql_conn)
+    print(f"Columnas en el origen: {userpermissions_df.columns.tolist()}")
+
+    # Migrar los datos a SQL Server de la tabla soltura_userpermissions
+    with sqlserver_conn.cursor() as cursor:
+        for _, row in userpermissions_df.iterrows():
+            #Se verifica si el username existe en la tabla soltura_users
+            cursor.execute("""
+                SELECT userid FROM solturadb.soltura_users WHERE email = ?
+            """, (row['username'],))
+
+            #Si existe una coincidencia, se obtiene el userid correspondiente
+            user_row = cursor.fetchone()  
+            if user_row:  
+                userid_correcto = user_row[0]
+            else:
+                userid_correcto = row['userid']  
+
+            # Se inserta los datos migrados y con el userid correcto por si ya existia el usuario en users
+            cursor.execute("""
+                INSERT INTO solturadb.soltura_userpermissions (enabled, deleted, lastupdate, username, checksum, userid, permissionid)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (row['enabled'], row['deleted'], row['lastupdate'], row['username'], row['checksum'], userid_correcto, row['permissionid']))
+
+        sqlserver_conn.commit()
+
+    print(f"Migración exitosa. {len(userpermissions_df)} permisos de usuario migrados")
+
+except Exception as e:
+    print(f"Error: {e}")
+
+finally:
+    mysql_conn.close()
+    sqlserver_conn.close()
+```
+## Script para migrar las suscripciones
+Para poder migrar los precios de planes, debemos primero migrar los datos de suscripciones. Entonces luego de conectarse a ambas bases de datos, obtiene los valores de suscripciones y los inserta en la misma tabla de Soltura
+``` python
+import pandas as pd
+import pymysql
+import pyodbc
+from datetime import datetime
+
+#Se conecta a las dos bases de datos
+mysql_conn = pymysql.connect(host='localhost', user='root', password='123', database='paymentdb')  
+sqlserver_conn = pyodbc.connect('DRIVER={ODBC Driver 17 for SQL Server};SERVER=DANIEL2005\SQLEXPRESS;DATABASE=soltura;Trusted_Connection=yes;')
+
+try:
+    #Extrae los datos de la tabla subscriptions
+    address_df = pd.read_sql("SELECT subscriptionid, description, logourl FROM payment_subscriptions", mysql_conn)
+    
+    #Migra los datos a SQL Server iterando columna por columna
+    with sqlserver_conn.cursor() as cursor:
+        for _, row in address_df.iterrows():
+            cursor.execute("""
+                INSERT INTO solturadb.soltura_subscriptions (description, logourl)
+                VALUES (?, ?)
+            """, row['description'], row['logourl'])
+        
+        sqlserver_conn.commit()
+    
+    print(f"Migración exitosa. {len(address_df)} subscripciones migradas")
+
+except Exception as e:
+    print(f"Error: {e}")
+finally:
+    mysql_conn.close()
+    sqlserver_conn.close()
+```
+## Script para migrar los precios de planes
+Una vez con los datos de las suscripciones migrados, se puede extrar la info de los precios de planes de Soltura. Para mantener la relacion de la nueva llave forane de suscription  en Soltura, utilizamos diccionarios donde compara los nombres de suscripciones y si es el mismo extrae el id, para que de esta manera al insertar los datos de la tabla, usamos el id correcto, manteniendo la relacion con los datos migrados en Soltura
+```python
+import pandas as pd
+import pymysql
+import pyodbc
+from datetime import datetime
+
+#Se conecta a las dos bases de datos
+mysql_conn = pymysql.connect(host='localhost', user='root', password='123', database='paymentdb')  
+sqlserver_conn = pyodbc.connect('DRIVER={ODBC Driver 17 for SQL Server};SERVER=DANIEL2005\SQLEXPRESS;DATABASE=soltura;Trusted_Connection=yes;')
+
+try:
+    # Consulta para extraer los datos de la tabla prices de Payment
+    #Se realiza un join con la tabla subscriptions para obtener el nombre de la suscripción para no perder la referencia
+    planprices_df = pd.read_sql("""
+        SELECT pp.planpricesid, pp.amount, pp.recurrencytype, pp.posttime, pp.endate, 
+               pp.current, pp.currencyid, pp.subscriptionid, s.description as subscription_name
+        FROM payment_planprices pp
+        JOIN payment_subscriptions s ON pp.subscriptionid = s.subscriptionid
+    """, mysql_conn)
+    
+    
+    #Se extraen el id y description de las suscripciones en Soltura
+    soltura_subscriptions = pd.read_sql("""
+        SELECT subscriptionid, description 
+        FROM solturadb.soltura_subscriptions
+    """, sqlserver_conn)
+    
+    #Con diccionarois se relacionan los nombres de las suscripciones con sus IDs
+    #Para poder asociar los datos migrados con los de Soltura
+    subscription_map = {}
+    for _, row in soltura_subscriptions.iterrows():
+        if row['description']:  # Verificar que la descripción no sea None
+            subscription_map[row['description'].lower()] = row['subscriptionid']
+    
+    
+
+    with sqlserver_conn.cursor() as cursor:
+        for _, row in planprices_df.iterrows():
+            #Busca el ID de la suscripción en el diccionario usando el nombre 
+            subscription_name = row['subscription_name'].lower() if row['subscription_name'] else ''
+            soltura_subscription_id = subscription_map.get(subscription_name)
+            
+            if not soltura_subscription_id:
+                continue
+            
+            try:
+                #Inserta los datos migrados con el ID de la suscripción de Soltura
+                cursor.execute("""
+                    INSERT INTO solturadb.soltura_planprices 
+                    (amount, recurrencytype, posttime, endate, [current], currencyid, subscriptionid)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, 
+                row['amount'],
+                row['recurrencytype'],
+                row['posttime'],
+                row['endate'],
+                row['current'],
+                row['currencyid'],
+                soltura_subscription_id)  #Usa el ID correspondiente
+                
+            except Exception as insert_error:
+                print(f"Error al insertar precio de plan: {insert_error}")
+        
+        sqlserver_conn.commit()
+    
+    print(f"Migración exitosa")
+
+except Exception as e:
+    print(f"Error durante la migración: {e}")
+finally:
+    mysql_conn.close()
+    sqlserver_conn.close()
+```
+## Script para migrar banner y home page sobre el nuevo cambio de sistema
+Por ultimo, para la creación del home page y del banner que va a utilizar Soltura, usamos este script que se debe insertar en la base de MongoDB en el collection de media. Esto tiene un id para identificarlo, el tipo de media que es, el titulo que va a contener, su descripción para que los clientes comprendan, la fecha de la migración de la base de datos, un link para que los usuarios de Payment se guien en el proceso de migrar a Soltura y por último el home page tiene un url de la imagen que va a contener  
+```json
+[{
+  "_id": {
+    "$oid": "6819a7c258f557cf57129530"
+  },
+  "tipo": "banner",
+  "titulo": "¡Soltura ha llegado!",
+  "descripcion": "Payment Assist ahora es Soltura. Descubre los nuevos beneficios.",
+  "fecha_migracion": {
+    "$date": "2025-12-15T00:00:00.000Z"
+  },
+  "link_guia": "https://soltura.com/guia-migracion-de-bases",
+  "activo": true
+},
+{
+  "_id": {
+    "$oid": "6819a86d58f557cf57129535"
+  },
+  "tipo": "home_page",
+  "titulo": "Bienvenido a Soltura",
+  "descripcion": "La pagina de pagos ahora es parte de Soltura. Con más beneficios y más comodidad.",
+  "fecha_publicacion": {
+    "$date": "2025-12-15T00:00:00.000Z"
+  },
+  "link_guia": "https://soltura.com/guia-migracion-de-bases",
+  "activo": true,
+  "imagen_url": "https://soltura.com/assets/img/home-page-soltura.jpg"
+}]
+```
+
+
+
+
+
+
+
+
+
+
 
