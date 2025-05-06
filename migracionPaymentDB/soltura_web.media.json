@@ -1,0 +1,26 @@
+[{
+  "_id": {
+    "$oid": "6819a7c258f557cf57129530"
+  },
+  "tipo": "banner",
+  "titulo": "¡Soltura ha llegado!",
+  "descripcion": "Payment Assist ahora es Soltura. Descubre los nuevos beneficios.",
+  "fecha_migracion": {
+    "$date": "2025-12-15T00:00:00.000Z"
+  },
+  "link_guia": "https://soltura.com/guia-migracion-de-bases",
+  "activo": true
+},
+{
+  "_id": {
+    "$oid": "6819a86d58f557cf57129535"
+  },
+  "tipo": "imagen_home",
+  "titulo": "Bienvenido a Soltura",
+  "descripcion": "La pagina de pagos ahora es parte de Soltura. Con más beneficios y más comodidad.",
+  "fecha_publicacion": {
+    "$date": "2025-12-15T00:00:00.000Z"
+  },
+  "link_guia": "https://soltura.com/guia-migracion-de-bases",
+  "activo": true
+}]
