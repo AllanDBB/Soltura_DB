@@ -53,6 +53,18 @@
   - [Triplicar las Transacciones Por Segundo Máximo](#Triplicar-las-Transacciones-Por-Segundo-Máximo)
 - [Soltura ft. PaymentAssistant](#soltura-ft-paymentassistant)
   - [Script para migrar los usuarios](#script-para-migrar-los-usuarios)
+  - [Script para migrar los modulos](#script-para-migrar-los-modulos)
+  - [Script para migrar los permisos](#script-para-migrar-los-permisos)
+  - [Script para migrar los permisos de ususarios](#script-para-migrar-los-permisos-de-usuarios)
+  - [Script para migrar las suscripciones](#script-para-migrar-las-suscripciones)
+  - [Script para migrar los precios de planes](#script-para-migrar-los-precios-de-planes)
+  - [Script para insertar banner y home page sobre el nuevo cambio de sistema](#script-para-insertar-banner-y-home-page-sobre-el-nuevo-cambio-de-sistema)
+
+
+
+
+
+
 
 
 ---
@@ -3254,7 +3266,7 @@ finally:
     mysql_conn.close()
     sqlserver_conn.close()
 ```
-## Script para migrar banner y home page sobre el nuevo cambio de sistema
+## Script para insertar banner y home page sobre el nuevo cambio de sistema
 Por ultimo, para la creación del home page y del banner que va a utilizar Soltura, usamos este script que se debe insertar en la base de MongoDB en el collection de media. Esto tiene un id para identificarlo, el tipo de media que es, el titulo que va a contener, su descripción para que los clientes comprendan, la fecha de la migración de la base de datos, un link para que los usuarios de Payment se guien en el proceso de migrar a Soltura y por último el home page tiene un url de la imagen que va a contener  
 ```json
 [{
