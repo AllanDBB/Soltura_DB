@@ -1,0 +1,1 @@
+El uso de un Pool de conexiones permitirá tener mas libertad al servidor de no estar instanciando constantemente conexiones si puede tener varios canales abiertos para las conexiones que van a llegar y reutilizarlos, de esta manera se consigue una mejoría de casi x10, se puede probar al ejecturar el archivo
