@@ -52,6 +52,8 @@
   - [Transacciones Por Segundo Máximo](#Transacciones-Por-Segundo-Máximo)
   - [Triplicar las Transacciones Por Segundo Máximo](#Triplicar-las-Transacciones-Por-Segundo-Máximo)
 - [Soltura ft. PaymentAssistant](#soltura-ft-paymentassistant)
+  - [Script para migrar los usuarios](#script-para-migrar-los-usuarios)
+
 
 ---
 # Integrantes:
