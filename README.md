@@ -52,7 +52,6 @@
   - [Transacción de Volumen](#transacción-de-volumen)
   - [Transacciones Por Segundo Máximo](#transacciones-por-segundo-máximo)
   - [Triplicar las Transacciones Por Segundo Máximo](#triplicar-las-transacciones-por-segundo-máximo)
-  - [](#)
 - [Soltura ft. PaymentAssistant](#soltura-ft-paymentassistant)
   - [Script para migrar los usuarios](#script-para-migrar-los-usuarios)
   - [Script para migrar los modulos](#script-para-migrar-los-modulos)
@@ -2849,11 +2848,17 @@ WAITFOR DELAY '00:00:10';
 COMMIT;
 ```
 Caso A: Aunque se hace un rollback evitando que se cambie el enable de 1 a 0, como tiene lectura sucia lee 0.
+
 ![image](https://github.com/user-attachments/assets/03c8e017-c53d-4095-bbb6-d272154ce3dc)
+
 Caso B: No se puede repetir la lectura entonces al ser sumado el costo total para usuarios de los planes cuando se inserta un valor en medio se genera un nonrepeatable read.
+
 ![image](https://github.com/user-attachments/assets/ab103650-3511-44e4-9d9b-c2e3d59d3129)
+
 Caso C: Calcula un promedio erroneo al haber sacado el numero de usuarios antes y como se inserto un nuevo usuario pagando genera que el promedio se vuelva mas dinero/menos usuarios reales.
+
 ![image](https://github.com/user-attachments/assets/59aeadb1-1b23-48f0-a2dd-96c437bc0de8)
+
 Caso D: El error no se ve, ya que el bloqueo no es prolongado no genera tiempos exagerados de espera. se ejecuta de manera rapida.
 
 NIVEL READ COMMITTED: TIENE DE NONREPETABLE READ Y LECTURAS FANTASMAS
@@ -2947,11 +2952,17 @@ WAITFOR DELAY '00:00:10';
 COMMIT;
 ```
 Caso A: Aunque se hace un rollback evitando que se cambie el enable de 1 a 0, como tiene no lectura sucia lee 1.
+
 ![image](https://github.com/user-attachments/assets/9dc2bac5-eb81-408e-9629-bfa2a85b975a)
+
 Caso B: No se puede repetir la lectura entonces al ser sumado el costo total para usuarios de los planes cuando se inserta un valor en medio se genera un nonrepeatable read.
+
 ![image](https://github.com/user-attachments/assets/ab103650-3511-44e4-9d9b-c2e3d59d3129)
+
 Caso C: Calcula un promedio erroneo al haber sacado el numero de usuarios antes y como se inserto un nuevo usuario pagando genera que el promedio se vuelva mas dinero/menos usuarios reales.
+
 ![image](https://github.com/user-attachments/assets/59aeadb1-1b23-48f0-a2dd-96c437bc0de8)
+
 Caso D: El error no se ve, ya que el bloqueo no es prolongado no genera tiempos exagerados de espera. se ejecuta de manera rapida.
 
 NIVEL REPEATABLE READ: TIENE PROBLEMAS DE LECTURAS FANTASMAS.
@@ -3042,11 +3053,17 @@ WAITFOR DELAY '00:00:10';
 COMMIT;
 ```
 Caso A: Aunque se hace un rollback evitando que se cambie el enable de 1 a 0, como tiene no lectura sucia lee 1.
+
 ![image](https://github.com/user-attachments/assets/9dc2bac5-eb81-408e-9629-bfa2a85b975a)
+
 Caso B: Se puede repetir la lectura entonces no habra pobremas con el avg que proporciona la lectura dado.
+
 ![image](https://github.com/user-attachments/assets/1048345f-47aa-4201-ae35-7bbafa22503a)
+
 Caso C: Calcula un promedio erroneo al haber sacado el numero de usuarios antes y como se inserto un nuevo usuario pagando genera que el promedio se vuelva mas dinero/menos usuarios reales.
+
 ![image](https://github.com/user-attachments/assets/59aeadb1-1b23-48f0-a2dd-96c437bc0de8)
+
 Caso D: El error no se ve, ya que el bloqueo no es prolongado no genera tiempos exagerados de espera. se ejecuta de manera rapida.
 
 NIVEL SERIALIZABLE: TIENE PROBLEMAS DE BLOQUEOS PROLONGADOS.
@@ -3140,11 +3157,17 @@ WAITFOR DELAY '00:00:10';
 COMMIT;
 ```
 Caso A: Aunque se hace un rollback evitando que se cambie el enable de 1 a 0, como tiene no lectura sucia lee 1.
+
 ![image](https://github.com/user-attachments/assets/9dc2bac5-eb81-408e-9629-bfa2a85b975a)
+
 Caso B: Se puede repetir la lectura entonces no habra pobremas con el avg que proporciona la lectura dado.
+
 ![image](https://github.com/user-attachments/assets/1048345f-47aa-4201-ae35-7bbafa22503a)
+
 Caso C: El promedio al no permitir phantoms se calcula de manera perfecta en ambos casos.
+
 ![image](https://github.com/user-attachments/assets/4b9a44d2-fc43-4542-9f72-41197452bcf5)
+
 Caso D: El error ocurre en cuanto tiempo al tener bloqueos tan prolongados, terminara haciendo que se relentice muchisimo los querys relacionados y cualquier serializable. Solo usarse en casos de total hermeticidad.
 
 ## Cursor de Update
@@ -3468,7 +3491,9 @@ app.listen(PORT, () => {
 });
 ```
 *Todas estas pruebas fueron efectuadas mediante Jmeter, el archivo de configuracion es node.jmx.*
+
 ![image](https://github.com/user-attachments/assets/9c5ca9eb-a7f0-44f4-a7cb-ea57734f0de9)
+
 ---
 # Soltura ft. PaymentAssistant
 Para la realización de esta última parte se utilizo Python Notebook con Pandas como herramienta para migrar la base de datos Payment Assistant a Soltura. A continuación se demostraran los scripts necesarios para migrar los datos solicitados en las instrucciones. También se demuestra el script para los inserts a MongoDB del banner y home page sobre el cambio de sistemas.
