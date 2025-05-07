@@ -950,6 +950,31 @@ Ejemplo: WHERE condicion1 = 1 AND condicion2 = 2
 
 ```
 ## 8 WITH ENCRYPTION
+``` sql
+DROP PROCEDURE IF EXISTS storageprocedureenc;
+GO
+
+CREATE PROCEDURE storageprocedureenc 
+WITH ENCRYPTION 
+AS
+BEGIN
+	SELECT * 
+    FROM solturadb.soltura_users
+    ORDER BY solturadb.soltura_users.userid ASC;  
+
+    PRINT 'EJECUTADO';
+END;
+GO
+
+EXEC storageprocedureenc;
+
+-- Esto debería devolver NULL si el SP está encriptado
+SELECT OBJECT_DEFINITION(OBJECT_ID('storageprocedureenc'));
+
+-- Esto debería lanzar un error
+EXEC sp_helptext 'storageprocedureenc';
+
+```
 ## 9 EXECUTE AS y DISTINCT
 En el procedimiento utilizamos WITH EXECUTE AS 'AuditUser' para ejecutar todo el código con los permisos limitados del usuario AuditUser 
 y aplicamos DISTINCT en la consulta principal (COUNT(DISTINCT r.redemptionid)) para asegurar que cada redención se cuente exactamente una vez,
