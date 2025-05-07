@@ -78,8 +78,8 @@
 # Documentación para el diseño
 La base de datos se diseño conforme al fixed diagram pdf
 
-##MongoDB
-Este es el modelo para la colección de paquetes informativos de Soltura
+## MongoDB
+Este es el modelo para la colección de paquetes informativos de Soltura, es un esquema que valida que cada documento insertado debe tener identificador unico para reconocer el paquete informativo, un estado para conocer si sigue activo o ya no, la lista de categorias para clasificar el contenido del paquete, la fecha en la que se publico en la web, el link de referencia donde el usuario puede ver información mas detallada como soporte tecnico y finalmente un titulo.
 ```json
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
