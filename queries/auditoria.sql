@@ -8,6 +8,19 @@ GO
 Insert into solturadb.soltura_logseverity(name)
 values('grave');
 
+-- Crear un log source.
+INSERT INTO solturadb.soltura_logsources DEFAULT VALUES;
+
+-- Crear LogTypes (tipos de registro)
+INSERT INTO solturadb.soltura_logtypes
+    (name, ref1description, ref2description, val1description, val2description, payment_logtypescol)
+VALUES
+    ('SEGURIDAD_USUARIO', 
+     'ID Usuario', 
+     'ID Operación', 
+     'Estado anterior', 
+     'Estado nuevo',
+     'Autenticación');
 
 -- Vamos a crear un usuario, con el que podamos hacer una auditoría y probar el EXECUTE AS
 -- se le dan solo permisos de lectura a las tablas de redenciones, usuarios y beneficios.
