@@ -5,6 +5,7 @@
   - [ÍNDICE](#índice)
 - [Integrantes:](#integrantes)
 - [Documentación para el diseño](#documentación-para-el-diseño)
+  - [MongoDB](#mongodb)
 - [Población de datos](#población-de-datos)
 - [Demostraciones T-SQL](#demostraciones-t-sql)
   - [1 y 2. Cursor local y global](#1-y-2-cursor-local-y-global)
@@ -44,18 +45,19 @@
   - [Consulta y exportar a CSV.](#consulta-y-exportar-a-csv)
   - [Bitácora en otro SQL Server.](#bitácora-en-otro-sql-server)
 - [Concurrencia](#concurrencia)
-  - [Deadlocks entre Dos Transacciones](#Deadlocks-entre-Dos-Transacciones)
-  - [Deadlocks en Cascada](#Deadlocks-en-Cascada)
-  - [Niveles de Isolacion](#Niveles-de-Isolacion)
-  - [Cursor de Update](#Cursor-de-Update)
-  - [Transacción de Volumen](#Transacción-de-Volumen)
-  - [Transacciones Por Segundo Máximo](#Transacciones-Por-Segundo-Máximo)
-  - [Triplicar las Transacciones Por Segundo Máximo](#Triplicar-las-Transacciones-Por-Segundo-Máximo)
+  - [Deadlocks entre Dos Transacciones](#deadlocks-entre-dos-transacciones)
+  - [Deadlocks en Cascada](#deadlocks-en-cascada)
+  - [Niveles de Isolacion](#niveles-de-isolacion)
+  - [Cursor de Update](#cursor-de-update)
+  - [Transacción de Volumen](#transacción-de-volumen)
+  - [Transacciones Por Segundo Máximo](#transacciones-por-segundo-máximo)
+  - [Triplicar las Transacciones Por Segundo Máximo](#triplicar-las-transacciones-por-segundo-máximo)
+  - [](#)
 - [Soltura ft. PaymentAssistant](#soltura-ft-paymentassistant)
   - [Script para migrar los usuarios](#script-para-migrar-los-usuarios)
   - [Script para migrar los modulos](#script-para-migrar-los-modulos)
   - [Script para migrar los permisos](#script-para-migrar-los-permisos)
-  - [Script para migrar los permisos de ususarios](#script-para-migrar-los-permisos-de-usuarios)
+  - [Script para migrar los permisos de usuarios](#script-para-migrar-los-permisos-de-usuarios)
   - [Script para migrar las suscripciones](#script-para-migrar-las-suscripciones)
   - [Script para migrar los precios de planes](#script-para-migrar-los-precios-de-planes)
   - [Script para insertar banner y home page sobre el nuevo cambio de sistema](#script-para-insertar-banner-y-home-page-sobre-el-nuevo-cambio-de-sistema)
@@ -355,6 +357,7 @@ Este es el modelo para la colección de reviews de Soltura
   }
 }
 ```
+
 Este es el modelo para la resolución de quejas de Soltura
 ```json
 {

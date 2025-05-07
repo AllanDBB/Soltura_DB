@@ -6,7 +6,7 @@ const PORT = 3000;
 const config = { //Parametros a configurar (un usuario, password, servido, puerto)
   user: 'nombre_usuario',
   password: 'password',
-  server: 'localhost',
+  server: 'ALLANDBB',
   port: 1433,
   database: 'soltura',
   options: {
