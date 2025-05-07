@@ -2923,8 +2923,210 @@ Se podria usar (pero mejor no): Si no hay otros querys queriendo acceder a la in
 
 ## Transacción de Volumen
 Nuestra transacción de volumen se basara en el canje de los beneficios antes adquiridos al notarse que será la operacion más usada y la razón por la cual el usuario quiere usar nuestros servicios, a esta la estresaremos para ver su capacidad maxima y mejorarla.
+```sql
+USE soltura;
+GO
+
+IF OBJECT_ID('solturadb.sp_insertRedemptionPorParametros', 'P') IS NOT NULL
+    DROP PROCEDURE solturadb.sp_insertRedemptionPorParametros; --Lo borra si es el caso para evitar errores al crear el procedimiento
+GO
+
+CREATE PROCEDURE solturadb.sp_insertRedemptionPorParametros
+    @userId INT,
+    @planpersonId INT,
+    @benefitId INT
+AS
+BEGIN
+    BEGIN TRY
+        BEGIN TRANSACTION;
+        IF NOT EXISTS --Revisa que los valores recibidos existan y cumplan las restricciones
+        (
+            SELECT 1
+            FROM solturadb.soltura_planperson_users ppu
+            JOIN solturadb.soltura_benefits b ON b.planpersonid = ppu.planpersonid
+            WHERE ppu.userid = @userId AND ppu.planpersonid = @planpersonId AND b.benefitsid = @benefitId
+        )
+        BEGIN
+            PRINT 'Relacion invalida entre ell usuario, su plan y el beneficio asociado al plan.'; --Si no existe ninguno tal que eso se cumpla hace rollback y termina el procedimiento.
+            ROLLBACK TRANSACTION;
+            RETURN;
+        END
+
+        DECLARE @redemptionMethodId INT;
+        DECLARE @reference1 BIGINT = 100000 + FLOOR(RAND() * 900000); --Valores random solo para dar a entender que ahi iria una referencia
+        DECLARE @reference2 BIGINT = 200000 + FLOOR(RAND() * 900000);
+        DECLARE @value1 NVARCHAR(100) = CONCAT('Redimido: ', @benefitId);
+        DECLARE @value2 NVARCHAR(100) = CONCAT('El Usuario ', @userId, 'lo a redimido.');
+
+        SELECT TOP 1 @redemptionMethodId = redemptionMethodsid
+        FROM solturadb.soltura_redemptionMethods
+        ORDER BY NEWID(); --Elige un redemptionmethod random para usar con la insercion de redemptions
+
+        INSERT INTO solturadb.soltura_redemptions
+            (date, redemptionMethodsid, userid, benefitsid, reference1, reference2, value1, value2, checksum)
+        VALUES
+            (GETDATE(), @redemptionMethodId, @userId, @benefitId, @reference1, @reference2,
+             CONVERT(VARBINARY(100), @value1), CONVERT(VARBINARY(100), @value2),HASHBYTES('SHA2_256', CONCAT(@userId, '089080800',@benefitId, 'valoresparaenloqueserelchecksummm',@reference1, 'denlealcoholalchecksum',@reference2, 'guaro',@value1, 'loqueraaaa',@value2))); 
+
+        COMMIT TRANSACTION;
+        PRINT 'Insert efectuado.';
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0
+            ROLLBACK TRANSACTION;
+
+        PRINT 'Ocurrio un error durante la insercion.';
+        THROW;
+    END CATCH
+END;
+GO
+```
 ## Transacciones Por Segundo Máximo
+Las transacciones por segundo que se podrian obtener con un backend que consiga un usuario con un plan y un beneficio a canjear y mandarlo a redimir logra unas transacciones por segundo de entre 100 y 120 por segundo
+El backend asociado (creado mediante nodejs):
+```nodejs
+const express = require('express');
+const sql = require('mssql');
+const app = express();
+const PORT = 3000;
+
+const config = { //Parametros a configurar (un usuario, password, servido, puerto)
+    user: 'nombre_usuario',
+    password: 'password',
+    server: 'localhost',
+    port: 1433,
+    database: 'soltura',
+    options: {
+        encrypt: true,
+        trustServerCertificate: true,
+    }
+};
+
+app.get('/redemption', async (req, res) => {
+    // se Crea un pool manualmente y cerrarlo después (esto hace que solo se use una vez por solicitud)
+    const pool = new sql.ConnectionPool(config);
+    try {
+        await pool.connect();
+
+        // Obtener datos aleatorios para enviar a la transaccion
+        const randomResult = await pool.request()
+            .execute('solturadb.sp_getRandomUserPlanBenefit');
+
+        if (!randomResult.recordset || randomResult.recordset.length === 0) //  Verifica si hay alguna combinacion valida.
+            {
+            return res.status(404).send('No se encontró combinación válida.');
+        }
+
+        // Extraer los datos necesarios de la respuesta
+        const { userid, planpersonid, benefitsid } = randomResult.recordset[0];
+
+        // Ejecuta la redencion pero mandando un usuario, el plan asociado al usuario y que beneficio quiere redimir.
+        await pool.request()
+            .input('userId', sql.Int, userid)
+            .input('planpersonId', sql.Int, planpersonid)
+            .input('benefitId', sql.Int, benefitsid)
+            .execute('solturadb.sp_insertRedemptionPorParametros');
+
+        res.json({
+            mensaje: 'Redención realizada correctamente (sin reutilizar pool).',
+            datos: { userid, planpersonid, benefitsid }
+        });
+    } catch (err) {
+        console.error('Error al ejecutar la redención sin pool:', err);
+        res.status(500).send('Error en redención.');
+    } finally {
+        pool.close(); // Cerrar el pool después de cada solicitud (para asegurarse de que no se mantenga usando)
+    }
+});
+
+app.listen(PORT, () => {
+    console.log(`Servidor escuchando en http://localhost:${PORT}`);
+});
+```
+*Todas estas pruebas fueron efectuadas mediante Jmeter, el archivo de configuracion es node.jmx.*
+![image](https://github.com/user-attachments/assets/2556b768-e13d-4be0-87f0-7ea242970a7f)
 ## Triplicar las Transacciones Por Segundo Máximo
+Logramos mejorar la velocidad de estas transacciones por segundo en un x9, al hacer uso de una pool de conexiones a las cuales los usuarios acceden de esta manera se evita que esten constantemente abriendo y cerrando conexiones poniendo cargar al servidor, mejor reutilizan las conexiones anteriores hasta que se completen todas.
+Este es el codigo del back end con pools en node.js
+```nodejs
+const express = require('express');
+const sql = require('mssql');
+const app = express();
+const PORT = 3000;
+
+const config = { //Parametros a configurar (un usuario, password, servido, puerto)
+  user: 'nombre_usuario',
+  password: 'password',
+  server: 'localhost',
+  port: 1433,
+  database: 'soltura',
+  options: {
+    encrypt: true,
+    trustServerCertificate: true,
+  },
+  pool: {
+    max: 35,
+    min: 30,
+    idleTimeoutMillis: 30000,
+  },
+};
+
+// Crear pool de conexiones para reutilizarlas una vez inicializadas.
+const poolPromise = new sql.ConnectionPool(config)
+  .connect()
+  .then(pool => {
+    console.log("Conectado a la base de datos");
+    return pool;
+  })
+  .catch(err => {
+    console.error("Error de conexión a la base de datos:", err);
+    process.exit(1);
+  });
+
+
+app.get('/redemption', async (req, res) => {
+  try {
+    const pool = await poolPromise; // Esperar a dar un pool de conexiones inicializado.
+
+    // Obtener datos aleatorios para enviar a la transaccion
+    const randomResult = await pool.request()
+      .execute('solturadb.sp_getRandomUserPlanBenefit');
+
+    if (!randomResult.recordset || randomResult.recordset.length === 0)  //  Verifica si hay alguna combinacion valida.
+      {
+      return res.status(404).send('No se encontró combinación válida.');
+    }
+
+    const { userid, planpersonid, benefitsid } = randomResult.recordset[0];// Extraer los datos necesarios de la respuesta
+
+    // Ejecuta la redencion pero mandando un usuario, el plan asociado al usuario y que beneficio quiere redimir.
+    await pool.request()
+      .input('userId', sql.Int, userid)
+      .input('planpersonId', sql.Int, planpersonid)
+      .input('benefitId', sql.Int, benefitsid)
+      .execute('solturadb.sp_insertRedemptionPorParametros');
+
+    res.json({
+      mensaje: 'Redención realizada correctamente.',
+      datos: {
+        userId: userid,
+        planpersonId: planpersonid,
+        benefitId: benefitsid
+      }
+    });
+
+  } catch (err) {
+    console.error('Error en redención:', err);
+    res.status(500).send('Error al procesar la redención.');
+  }
+});
+
+app.listen(PORT, () => {
+  console.log(`Servidor escuchando en http://localhost:${PORT}`);
+});
+```
+*Todas estas pruebas fueron efectuadas mediante Jmeter, el archivo de configuracion es node.jmx.*
+![image](https://github.com/user-attachments/assets/9c5ca9eb-a7f0-44f4-a7cb-ea57734f0de9)
 ---
 # Soltura ft. PaymentAssistant
 Para la realización de esta última parte se utilizo Python Notebook con Pandas como herramienta para migrar la base de datos Payment Assistant a Soltura. A continuación se demostraran los scripts necesarios para migrar los datos solicitados en las instrucciones. También se demuestra el script para los inserts a MongoDB del banner y home page sobre el cambio de sistemas.
