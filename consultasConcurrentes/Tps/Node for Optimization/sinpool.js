@@ -3,7 +3,7 @@ const sql = require('mssql');
 const app = express();
 const PORT = 3000;
 
-const config = {
+const config = { //Parametros a configurar (un usuario, password, servido, puerto)
     user: 'nombre_usuario',
     password: 'password',
     server: 'localhost',
@@ -16,22 +16,24 @@ const config = {
 };
 
 app.get('/redemption', async (req, res) => {
-    // Crear pool manualmente y cerrarlo después
+    // se Crea un pool manualmente y cerrarlo después (esto hace que solo se use una vez por solicitud)
     const pool = new sql.ConnectionPool(config);
     try {
         await pool.connect();
 
-        // Obtener datos aleatorios
+        // Obtener datos aleatorios para enviar a la transaccion
         const randomResult = await pool.request()
             .execute('solturadb.sp_getRandomUserPlanBenefit');
 
-        if (!randomResult.recordset || randomResult.recordset.length === 0) {
+        if (!randomResult.recordset || randomResult.recordset.length === 0) //  Verifica si hay alguna combinacion valida.
+            {
             return res.status(404).send('No se encontró combinación válida.');
         }
 
+        // Extraer los datos necesarios de la respuesta
         const { userid, planpersonid, benefitsid } = randomResult.recordset[0];
 
-        // Ejecutar redención
+        // Ejecuta la redencion pero mandando un usuario, el plan asociado al usuario y que beneficio quiere redimir.
         await pool.request()
             .input('userId', sql.Int, userid)
             .input('planpersonId', sql.Int, planpersonid)
@@ -46,7 +48,7 @@ app.get('/redemption', async (req, res) => {
         console.error('Error al ejecutar la redención sin pool:', err);
         res.status(500).send('Error en redención.');
     } finally {
-        pool.close(); // Cerrar el pool después de cada solicitud
+        pool.close(); // Cerrar el pool después de cada solicitud (para asegurarse de que no se mantenga usando)
     }
 });
 
