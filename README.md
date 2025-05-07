@@ -76,7 +76,297 @@
 ---
 
 # Documentación para el diseño
+La base de datos se diseño conforme al fixed diagram pdf
 
+##MongoDB
+Este es el modelo para la colección de paquetes informativos de Soltura
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "_id",
+    "activo",
+    "categorias",
+    "contenido",
+    "fecha_publicacion",
+    "link_referencia",
+    "titulo"
+  ],
+  "properties": {
+    "_id": {
+      "$ref": "#/$defs/ObjectId"
+    },
+    "activo": {
+      "type": "boolean"
+    },
+    "categorias": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "contenido": {
+      "type": "string"
+    },
+    "fecha_publicacion": {
+      "$ref": "#/$defs/Date"
+    },
+    "link_referencia": {
+      "type": "string"
+    },
+    "titulo": {
+      "type": "string"
+    }
+  },
+  "$defs": {
+    "ObjectId": {
+      "type": "object",
+      "properties": {
+        "$oid": {
+          "type": "string",
+          "pattern": "^[0-9a-fA-F]{24}$"
+        }
+      },
+      "required": [
+        "$oid"
+      ],
+      "additionalProperties": false
+    },
+    "Date": {
+      "type": "object",
+      "properties": {
+        "$date": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "$date"
+      ],
+      "additionalProperties": false
+    }
+  }
+}
+```
+Este es el modelo para la colección de la media de Soltura
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "_id",
+    "activo",
+    "descripcion",
+    "link_guia",
+    "tipo",
+    "titulo"
+  ],
+  "properties": {
+    "_id": {
+      "$ref": "#/$defs/ObjectId"
+    },
+    "activo": {
+      "type": "boolean"
+    },
+    "descripcion": {
+      "type": "string"
+    },
+    "fecha_migracion": {
+      "$ref": "#/$defs/Date"
+    },
+    "fecha_publicacion": {
+      "$ref": "#/$defs/Date"
+    },
+    "imagen_url": {
+      "type": "string"
+    },
+    "link_guia": {
+      "type": "string"
+    },
+    "tipo": {
+      "type": "string"
+    },
+    "titulo": {
+      "type": "string"
+    }
+  },
+  "$defs": {
+    "ObjectId": {
+      "type": "object",
+      "properties": {
+        "$oid": {
+          "type": "string",
+          "pattern": "^[0-9a-fA-F]{24}$"
+        }
+      },
+      "required": [
+        "$oid"
+      ],
+      "additionalProperties": false
+    },
+    "Date": {
+      "type": "object",
+      "properties": {
+        "$date": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "$date"
+      ],
+      "additionalProperties": false
+    }
+  }
+}
+```
+Este es el modelo para la colección de promociones de Soltura
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "_id",
+    "activo",
+    "condiciones",
+    "descripcion",
+    "fecha_fin",
+    "fecha_inicio",
+    "imagen_url",
+    "titulo"
+  ],
+  "properties": {
+    "_id": {
+      "$ref": "#/$defs/ObjectId"
+    },
+    "activo": {
+      "type": "boolean"
+    },
+    "condiciones": {
+      "type": "string"
+    },
+    "descripcion": {
+      "type": "string"
+    },
+    "fecha_fin": {
+      "$ref": "#/$defs/Date"
+    },
+    "fecha_inicio": {
+      "$ref": "#/$defs/Date"
+    },
+    "imagen_url": {
+      "type": "string"
+    },
+    "titulo": {
+      "type": "string"
+    }
+  },
+  "$defs": {
+    "ObjectId": {
+      "type": "object",
+      "properties": {
+        "$oid": {
+          "type": "string",
+          "pattern": "^[0-9a-fA-F]{24}$"
+        }
+      },
+      "required": [
+        "$oid"
+      ],
+      "additionalProperties": false
+    },
+    "Date": {
+      "type": "object",
+      "properties": {
+        "$date": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "$date"
+      ],
+      "additionalProperties": false
+    }
+  }
+}
+```
+Este es el modelo para la colección de reviews de Soltura
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "_id",
+    "cliente_id",
+    "comentario",
+    "fecha",
+    "puntaje",
+    "servicios_usados"
+  ],
+  "properties": {
+    "_id": {
+      "$ref": "#/$defs/ObjectId"
+    },
+    "cliente_id": {
+      "type": "integer"
+    },
+    "comentario": {
+      "type": "string"
+    },
+    "fecha": {
+      "$ref": "#/$defs/Date"
+    },
+    "puntaje": {
+      "type": "integer"
+    },
+    "servicios_usados": {
+      "type": "string"
+    }
+  },
+  "$defs": {
+    "ObjectId": {
+      "type": "object",
+      "properties": {
+        "$oid": {
+          "type": "string",
+          "pattern": "^[0-9a-fA-F]{24}$"
+        }
+      },
+      "required": [
+        "$oid"
+      ],
+      "additionalProperties": false
+    },
+    "Date": {
+      "type": "object",
+      "properties": {
+        "$date": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "$date"
+      ],
+      "additionalProperties": false
+    }
+  }
+}
+```
+Este es el modelo para la resolución de quejas de Soltura
+```json
+{
+  "caso_id": "001245",
+  "cliente_id": "523",
+  "descripcion": "El cliente reportó que no le reconocieron la membresia de Smartifit.",
+  "fecha_resolucion": { "$date": "2025-05-05T11:00:00.000Z" },
+  "resultado": "Reembolso realizado",
+  "resuelto_por": "Laura Rojas",
+  "satisfaccion_cliente": 5
+}
+```
 ---
 # Población de datos
 
