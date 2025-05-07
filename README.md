@@ -150,7 +150,7 @@ Este es el modelo para la colección de paquetes informativos de Soltura, es un 
   }
 }
 ```
-Este es el modelo para la colección de la media de Soltura
+Este es el modelo para la colección de la media de Soltura, donde se muestra el contenido visual en la web como los banners y pagina principal. Donde se utiliza un id para identificar el unico del documento, activo para reconocers si el contenido sigue activo o no, una descripcion donde se especifica el proposito con Soltura, el link de guia para anuncios por ejemplo que redirigan a paginas como Soltura, el tipo de web que se genera como banner o home page  y por ultimo el titulo que contiene.
 ```json
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -222,7 +222,7 @@ Este es el modelo para la colección de la media de Soltura
   }
 }
 ```
-Este es el modelo para la colección de promociones de Soltura
+Este es el modelo para la colección de promociones de Soltura, para gestionar y mostras campañas promocionales a los usuarios de Soltura en plannes y membresias. Contiene un id unico, un valor activo para reconocer si sigen activos, condiciones que es donde se explica los terminos y condiciones de la promoción, descripcion donde se menciona de que trata la promocion, la fecha de inicio de la promocion y la fecha final de la promocion, el imagen que contiene y el titulo respectivo.
 ```json
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -293,7 +293,7 @@ Este es el modelo para la colección de promociones de Soltura
   }
 }
 ```
-Este es el modelo para la colección de reviews de Soltura
+Este es el modelo para la colección de reviews de los clientes de Soltura, este contiene un id, el id del cliente para reconcoer cual es el usuario, un comentario que es donde se pone el feedback, la fecha que registra cuando se hizo, el puntaje  que le dio al cliente de una escala del 1 al 5 y los servicios usados que es donde menciona el servicio usado.
 ```json
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -356,8 +356,7 @@ Este es el modelo para la colección de reviews de Soltura
   }
 }
 ```
-
-Este es el modelo para la resolución de quejas de Soltura
+Este es el modelo para la resolución de quejas de Soltura, donde registra como fue la atencion al cliente. Contiene el caso del id para identificarlo, el id del cliente para reconocer los clientes, la descripcion donde se menciona el motivo, la fecha de resolucion de cuando se soluciono el problema, el resultado donde se dice en que termino el caso, resuelto por donde se dice quien fue la persona que resolvio y una califacion de la satisfaccion del cliente
 ```json
 {
   "caso_id": "001245",
