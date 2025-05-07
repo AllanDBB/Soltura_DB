@@ -4,6 +4,11 @@
 USE soltura;
 GO
 
+-- Crear un log severity.
+Insert into solturadb.soltura_logseverity(name)
+values('grave');
+
+
 -- Vamos a crear un usuario, con el que podamos hacer una auditoría y probar el EXECUTE AS
 -- se le dan solo permisos de lectura a las tablas de redenciones, usuarios y beneficios.
 IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = 'AuditUser')
